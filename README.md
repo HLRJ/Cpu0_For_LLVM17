@@ -2,14 +2,15 @@
 
 # Introduction
 
-本仓库是记录了为[llvm17.0.6](https://github.com/llvm/llvm-project/releases/tag/llvmorg-17.0.6)添加了一个新的后端Cpu0，主要参考了书籍《Tutorial: Creating an LLVM Backend for
-the Cpu0 Architecture》。
+本仓库是记录了为[llvm17.0.6](https://github.com/llvm/llvm-project/releases/tag/llvmorg-17.0.6)添加了一个新的后端Cpu0，主要参考了书籍[《Tutorial: Creating an LLVM Backend for
+the Cpu0 Architecture》](https://jonathan2251.github.io/lbd/index.html)。
 
 但由于这本书目前提供的代码的版本是llvm12，所以本仓库的目的是想通过移植新版本的过程来学习掌握llvm后端开发。
 
 
 
 # TODO
+
 
 为了尽快完成移植工作，做出以下时间安排。
 
@@ -22,10 +23,10 @@ the Cpu0 Architecture》。
 
 后续章节待定，等上面章节完成后，再进行时间安排
 
+使用chatgpt将tutorial简单地翻译了一下，可供[参考](https://docs.qq.com/doc/DUlV4TE5LbEpjT21F)
 
 
-
-# References
+# References and Acknowledgements
 
 http://jonathan2251.github.io/lbd/index.html
 
