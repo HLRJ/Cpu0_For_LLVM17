@@ -23,8 +23,8 @@ namespace llvm {
   class Target;
   class Triple;
 
-  extern Target TheCpu0Target;
-  extern Target TheCpu0elTarget;
+//  extern Target TheCpu0Target;
+//  extern Target TheCpu0elTarget;
 
 } // End llvm namespace
 
@@ -38,6 +38,6 @@ namespace llvm {
 #include "Cpu0GenInstrInfo.inc"
 
 #define GET_SUBTARGETINFO_ENUM
-// #include "Cpu0GenSubtargetInfo.inc"
+ #include "Cpu0GenSubtargetInfo.inc"
 
 #endif

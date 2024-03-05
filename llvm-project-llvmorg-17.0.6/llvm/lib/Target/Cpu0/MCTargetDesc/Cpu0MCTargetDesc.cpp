@@ -32,7 +32,7 @@ using namespace llvm;
 #include "Cpu0GenInstrInfo.inc"
 
 #define GET_SUBTARGETINFO_MC_DESC
-// #include "Cpu0GenSubtargetInfo.inc"
+ #include "Cpu0GenSubtargetInfo.inc"
 
 #define GET_REGINFO_MC_DESC
 #include "Cpu0GenRegisterInfo.inc"
