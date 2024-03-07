@@ -19,7 +19,13 @@ using namespace llvm;
 
 bool FixGlobalBaseReg;
 
-Cpu0FunctionInfo::~Cpu0FunctionInfo() {}
+MachineFunctionInfo *
+Cpu0FunctionInfo::clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,
+                        const DenseMap<MachineBasicBlock *, MachineBasicBlock *>
+                        &Src2DstMBB) const {
+    return DestMF.cloneInfo<Cpu0FunctionInfo>(*this);
+}
+Cpu0FunctionInfo::~Cpu0FunctionInfo() = default;
 
 void Cpu0FunctionInfo::anchor() { }
 
