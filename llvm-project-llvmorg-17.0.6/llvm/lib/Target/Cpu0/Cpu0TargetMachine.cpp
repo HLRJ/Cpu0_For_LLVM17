@@ -10,18 +10,18 @@
 // Implements the info about Cpu0 target spec.
 //
 //===----------------------------------------------------------------------===//
-
-#include "Cpu0TargetMachine.h"
+#include "Cpu0SEISelDAGToDAG.h"
 #include "Cpu0.h"
 #include "Cpu0Subtarget.h"
+#include "Cpu0TargetMachine.h"
 #include "Cpu0TargetObjectFile.h"
 #include "TargetInfo/Cpu0TargetInfo.h"
-#include "llvm/IR/Attributes.h"
-#include "llvm/IR/Function.h"
-#include "llvm/Support/CodeGen.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/Function.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/CodeGen.h"
 #include "llvm/Target/TargetOptions.h"
 
 using namespace llvm;
@@ -150,9 +150,17 @@ namespace {
     const Cpu0Subtarget &getCpu0Subtarget() const {
       return *getCpu0TargetMachine().getSubtargetImpl();
     }
+    bool addInstSelector() override;
   };
 } // namespace
 
 TargetPassConfig *Cpu0TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new Cpu0PassConfig(*this, PM);
+}
+
+// Install an instruction selector pass using
+// the ISelDag to gen Cpu0 code.
+bool Cpu0PassConfig::addInstSelector() {
+  addPass(createCpu0SEISelDag(getCpu0TargetMachine(), getOptLevel()));
+  return false;
 }
