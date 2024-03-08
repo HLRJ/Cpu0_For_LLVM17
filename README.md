@@ -16,7 +16,7 @@ the Cpu0 Architecture》](https://jonathan2251.github.io/lbd/index.html)。
 
 
 - [x] 2024.3.3-3.4 chapter02
-- [ ] 2024.3.5-3.7 chapter03
+- [x] 2024.3.5-3.8 chapter03
 - [ ] 2024.3.8-3.10 chapter04
 - [ ] 2024.3.11-3.13 chapter05
 - [ ] 2024.3.14-3.16 chapter06
@@ -45,3 +45,4 @@ https://github.com/PacktPublishing/Learn-LLVM-17
 
 https://zhuanlan.zhihu.com/p/648236901
 
+https://zhuanlan.zhihu.com/p/641991640
