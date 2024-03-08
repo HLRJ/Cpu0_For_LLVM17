@@ -59,7 +59,7 @@ namespace llvm {
     }
 
     bool hasChapter3_5() const {
-      return false;
+      return true;
     }
 
     bool hasChapter4_1() const {

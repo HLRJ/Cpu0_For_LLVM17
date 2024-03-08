@@ -72,6 +72,9 @@ def DisableOverflow : Predicate<"Subtarget->disableOverflow()">;
 def HasCmp      :     Predicate<"Subtarget->hasCmp()">;
 def HasSlt      :     Predicate<"Subtarget->hasSlt()">;
 
+class Cpu0InstAlias<string Asm, dag Result, bit Emit = 0b1> :
+  InstAlias<Asm, Result, Emit>;
+
 //===----------------------------------------------------------------------===//
 // Instruction format superclass
 //===----------------------------------------------------------------------===//
@@ -88,6 +91,13 @@ def simm16      : Operand<i32> {
   let DecoderMethod= "DecodeSimm16";
 }
 
+def shamt       : Operand<i32>;
+
+// Unsigned Operand
+def uimm16      : Operand<i32> {
+  let PrintMethod = "printUnsignedImm";
+}
+
 // Address operand
 def mem : Operand<iPTR> {
   let PrintMethod = "printMemOperand";
@@ -95,9 +105,39 @@ def mem : Operand<iPTR> {
   let EncoderMethod = "getMemEncoding";
 }
 
+// Transformation Function - get the lower 16 bits.
+def LO16 : SDNodeXForm<imm, [{
+  return getImm(N, N->getZExtValue() & 0xffff);
+}]>;
+
+// Transformation Function - get the higher 16 bits.
+def HI16 : SDNodeXForm<imm, [{
+  return getImm(N, (N->getZExtValue() >> 16) & 0xffff);
+}]>;
+
 // Node immediate fits as 16-bit sign extended on target immediate.
 // e.g. addi, andi
 def immSExt16  : PatLeaf<(imm), [{ return isInt<16>(N->getSExtValue()); }]>;
+
+// Node immediate fits as 16-bit zero extended on target immediate.
+// The LO16 param means that only the lower 16 bits of the node
+// immediate are caught.
+// e.g. addiu, sltiu
+def immZExt16  : PatLeaf<(imm), [{
+  if (N->getValueType(0) == MVT::i32)
+    return (uint32_t)N->getZExtValue() == (unsigned short)N->getZExtValue();
+  else
+    return (uint64_t)N->getZExtValue() == (unsigned short)N->getZExtValue();
+}], LO16>;
+
+// Immediate can be loaded with LUi (32-bit int with lower 16-bit cleared).
+def immLow16Zero : PatLeaf<(imm), [{
+  int64_t Val = N->getSExtValue();
+  return isInt<32>(Val) && !(Val & 0xffff);
+}]>;
+
+// shamt field must fit in 5 bits.
+def immZExt5 : ImmLeaf<i32, [{return Imm == (Imm & 0x1f);}]>;
 
 // Cpu0 Address Mode! SDNode frameindex could possibily be a match
 // since load and store instructions from stack used it.
@@ -128,6 +168,19 @@ def store_a         : AlignedStore<store>;
 // Instructions specific format
 //===----------------------------------------------------------------------===//
 
+let Predicates = [Ch3_5] in {
+// Arithmetic and logical instructions with 3 register operands.
+class ArithLogicR<bits<8> op, string instr_asm, SDNode OpNode,
+                  InstrItinClass itin, RegisterClass RC, bit isComm = 0>:
+  FA<op, (outs GPROut:$ra), (ins RC:$rb, RC:$rc),
+     !strconcat(instr_asm, "\t$ra, $rb, $rc"),
+     [(set GPROut:$ra, (OpNode RC:$rb, RC:$rc))], itin> {
+  let shamt = 0;
+  let isCommutable = isComm;	// e.g. add rb rc =  add rc rb
+  let isReMaterializable = 1;
+}
+}
+
 // Arithmetic and logical instructions with 2 register operands.
 class ArithLogicI<bits<8> op, string instr_asm, SDNode OpNode,
                   Operand Od, PatLeaf imm_type, RegisterClass RC> :
@@ -135,6 +188,33 @@ class ArithLogicI<bits<8> op, string instr_asm, SDNode OpNode,
      !strconcat(instr_asm, "\t$ra, $rb, $imm16"),
      [(set GPROut:$ra, (OpNode RC:$rb, imm_type:$imm16))], IIAlu> {
   let isReMaterializable = 1;
+}
+
+let Predicates = [Ch3_5] in {
+// Shifts
+class shift_rotate_imm<bits<8> op, bits<4> isRotate, string instr_asm,
+                       SDNode OpNode, PatFrag PF, Operand ImmOpnd,
+                       RegisterClass RC>:
+  FA<op, (outs GPROut:$ra), (ins RC:$rb, ImmOpnd:$shamt),
+     !strconcat(instr_asm, "\t$ra, $rb, $shamt"),
+     [(set GPROut:$ra, (OpNode RC:$rb, PF:$shamt))], IIAlu> {
+  let rc = 0;
+}
+
+// 32-bit shift instructions.
+class shift_rotate_imm32<bits<8> op, bits<4> isRotate, string instr_asm,
+                         SDNode OpNode>:
+  shift_rotate_imm<op, isRotate, instr_asm, OpNode, immZExt5, shamt, CPURegs>;
+}
+
+let Predicates = [Ch3_5] in {
+// Load Upper Imediate
+class LoadUpper<bits<8> op, string instr_asm, RegisterClass RC, Operand Imm>:
+  FL<op, (outs RC:$ra), (ins Imm:$imm16),
+     !strconcat(instr_asm, "\t$ra, $imm16"), [], IIAlu> {
+  let rb = 0;
+  let isReMaterializable = 1;
+}
 }
 
 class FMem<bits<8> op, dag outs, dag ins, string asmstr, list<dag> pattern,
@@ -211,10 +291,24 @@ def ST     : StoreM32<0x02, "st",  store_a>;
 /// Arithmetic Instructions (ALU Immediate)
 // IR "add" defined in include/llvm/Target/TargetSelectionDAG.td, line 315 (def add).
 def ADDiu   : ArithLogicI<0x09, "addiu", add, simm16, immSExt16, CPURegs>;
+let Predicates = [Ch3_5] in {
+def ORi     : ArithLogicI<0x0d, "ori", or, uimm16, immZExt16, CPURegs>;
+}
+let Predicates = [Ch3_5] in {
+def LUi     : LoadUpper<0x0F, "lui", GPROut, uimm16>;
+}
 
 /// Arithmetic Instructions (3-Operand, R-Type)
+let Predicates = [Ch3_5] in {
+let Predicates = [DisableOverflow] in {
+def ADDu    : ArithLogicR<0x11, "addu", add, IIAlu, CPURegs, 1>;
+}
+}
 
 /// Shift Instructions
+let Predicates = [Ch3_5] in {
+def SHL     : shift_rotate_imm32<0x1e, 0x00, "shl", shl>;
+}
 
 def JR      : JumpFR<0x3c, "jr", GPROut>;
 
@@ -229,6 +323,14 @@ def RET     : RetBase<GPROut>;
 let addr=0 in
   def NOP   : FJ<0, (outs), (ins), "nop", [], IIAlu>;
 
+let Predicates = [Ch3_5] in {
+//===----------------------------------------------------------------------===//
+// Instruction aliases
+//===----------------------------------------------------------------------===//
+def : Cpu0InstAlias<"move $dst, $src",
+                    (ADDu GPROut:$dst, GPROut:$src,ZERO), 1>;
+}
+
 //===----------------------------------------------------------------------===//
 //  Arbitrary patterns that map to one or more instructions
 //===----------------------------------------------------------------------===//
@@ -236,4 +338,14 @@ let addr=0 in
 // Small immediates
 def : Pat<(i32 immSExt16:$in),
           (ADDiu ZERO, imm:$in)>;
+let Predicates = [Ch3_5] in {
+def : Pat<(i32 immZExt16:$in),
+          (ORi ZERO, imm:$in)>;
+def : Pat<(i32 immLow16Zero:$in),
+          (LUi (HI16 imm:$in))>;
+
+// Arbitrary immediates
+def : Pat<(i32 imm:$imm),
+          (ORi (LUi (HI16 imm:$imm)), (LO16 imm:$imm))>;
+} // let Predicates = [Ch3_4]
 
