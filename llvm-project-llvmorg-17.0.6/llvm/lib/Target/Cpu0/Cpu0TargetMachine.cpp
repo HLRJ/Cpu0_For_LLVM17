@@ -14,6 +14,7 @@
 #include "Cpu0.h"
 #include "Cpu0Subtarget.h"
 #include "Cpu0TargetMachine.h"
+#include "Cpu0MachineFunction.h"
 #include "Cpu0TargetObjectFile.h"
 #include "TargetInfo/Cpu0TargetInfo.h"
 #include "llvm/CodeGen/Passes.h"
@@ -134,6 +135,13 @@ Cpu0TargetMachine::getSubtargetImpl(const Function &F) const {
   }
   return I.get();
 }
+
+MachineFunctionInfo *Cpu0TargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return Cpu0FunctionInfo::create<Cpu0FunctionInfo>(Allocator, F, STI);
+}
+
 
 namespace {
 //@Cpu0PassConfig {

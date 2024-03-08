@@ -14,7 +14,6 @@
 #ifndef LLVM_LIB_TARGET_CPU0_CPU0TARGETMACHINE_H
 #define LLVM_LIB_TARGET_CPU0_CPU0TARGETMACHINE_H
 
-
 #include "MCTargetDesc/Cpu0ABIInfo.h"
 #include "Cpu0Subtarget.h"
 #include "llvm/CodeGen/Passes.h"
@@ -54,6 +53,10 @@ public:
   // Pass Pipeline Configuration
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
 
+  MachineFunctionInfo *
+  createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,
+                            const TargetSubtargetInfo *STI) const override;
+
   TargetLoweringObjectFile *getObjFileLowering() const override {
     return TLOF.get();
   }
@@ -83,7 +86,6 @@ public:
                       CodeGenOpt::Level OL, bool JIT);
 };
 } // End llvm namespace
-
 
 
 
