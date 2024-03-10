@@ -13,7 +13,7 @@ To support logic instructions
 
 
 
-共计11个文件
+共计3个文件
 
 
 
@@ -34,15 +34,16 @@ cmake -DCMAKE_BUILD_TYPE=Debug         \
 
 
 
-进入到Cpu0Test目录下，我们使用ch4_math.ll
+进入到Cpu0Test目录下，我们使用ch4_2_slt_explain.cpp
 ```shell
-./../llvm-project-llvmorg-17.0.6/build/bin/clang -target mips-unknown-linux-gnu -c  ch4_1_mod.cpp -emit-llvm -o ch4_1_mod.bc
-./../llvm-project-llvmorg-17.0.6/build/bin/llc -march=cpu0 -relocation-model=pic -filetype=asm ch4_1_mod.bc -o -
+./../llvm-project-llvmorg-17.0.6/build/bin/clang -target mips-unknown-linux-gnu -c  ch4_2_slt_explain.cpp -emit-llvm -o ch4_2_slt_explain.bc
+./../llvm-project-llvmorg-17.0.6/build/bin/llc -march=cpu0 -mcpu=cpu032I -relocation-model=static -filetype=asm ch4_2_slt_explain.bc -o -
 ```
 
 结果如下：
 
-![](./images/img04_1_01.png)
+![](./images/img04_2_01.png)
+
 
 
 
@@ -50,3 +51,6 @@ cmake -DCMAKE_BUILD_TYPE=Debug         \
 
 
 
+# note
+
+上次commit提交把这个04_2文件也提交了，失误。
