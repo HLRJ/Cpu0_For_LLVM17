@@ -40,17 +40,17 @@ using namespace llvm;
 //@3_1 1 {
 const char *Cpu0TargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
-    case Cpu0ISD::JmpLink:           return "Cpu0ISD::JmpLink";
-    case Cpu0ISD::TailCall:          return "Cpu0ISD::TailCall";
-    case Cpu0ISD::Hi:                return "Cpu0ISD::Hi";
-    case Cpu0ISD::Lo:                return "Cpu0ISD::Lo";
-    case Cpu0ISD::GPRel:             return "Cpu0ISD::GPRel";
-    case Cpu0ISD::Ret:               return "Cpu0ISD::Ret";
-    case Cpu0ISD::EH_RETURN:         return "Cpu0ISD::EH_RETURN";
-    case Cpu0ISD::DivRem:            return "Cpu0ISD::DivRem";
-    case Cpu0ISD::DivRemU:           return "Cpu0ISD::DivRemU";
-    case Cpu0ISD::Wrapper:           return "Cpu0ISD::Wrapper";
-    default:                         return NULL;
+  case Cpu0ISD::JmpLink:           return "Cpu0ISD::JmpLink";
+  case Cpu0ISD::TailCall:          return "Cpu0ISD::TailCall";
+  case Cpu0ISD::Hi:                return "Cpu0ISD::Hi";
+  case Cpu0ISD::Lo:                return "Cpu0ISD::Lo";
+  case Cpu0ISD::GPRel:             return "Cpu0ISD::GPRel";
+  case Cpu0ISD::Ret:               return "Cpu0ISD::Ret";
+  case Cpu0ISD::EH_RETURN:         return "Cpu0ISD::EH_RETURN";
+  case Cpu0ISD::DivRem:            return "Cpu0ISD::DivRem";
+  case Cpu0ISD::DivRemU:           return "Cpu0ISD::DivRemU";
+  case Cpu0ISD::Wrapper:           return "Cpu0ISD::Wrapper";
+  default:                         return NULL;
   }
 }
 //@3_1 1 }
@@ -61,9 +61,20 @@ Cpu0TargetLowering::Cpu0TargetLowering(const Cpu0TargetMachine &TM,
     : TargetLowering(TM), Subtarget(STI), ABI(TM.getABI()) {
 
   // Cpu0 Custom Operations
-
+  setOperationAction(ISD::SDIV, MVT::i32, Expand);
+  setOperationAction(ISD::SREM, MVT::i32, Expand);
+  setOperationAction(ISD::UDIV, MVT::i32, Expand);
+  setOperationAction(ISD::UREM, MVT::i32, Expand);
   // Operations not directly supported by Cpu0.
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16 , Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i32 , Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::Other , Expand);
 
+
+  setTargetDAGCombine(ISD::SDIVREM);
+  setTargetDAGCombine(ISD::UDIVREM);
 //- Set .align 2
 // It will emit .align 2 later
   setMinFunctionAlignment(Align(2));
@@ -73,6 +84,58 @@ Cpu0TargetLowering::Cpu0TargetLowering(const Cpu0TargetMachine &TM,
 const Cpu0TargetLowering *Cpu0TargetLowering::create(const Cpu0TargetMachine &TM,
                                                      const Cpu0Subtarget &STI) {
   return llvm::createCpu0SETargetLowering(TM, STI);
+}
+
+static SDValue performDivRemCombine(SDNode *N, SelectionDAG& DAG,
+                                    TargetLowering::DAGCombinerInfo &DCI,
+                                    const Cpu0Subtarget &Subtarget) {
+  if (DCI.isBeforeLegalizeOps())
+    return SDValue();
+
+  EVT Ty = N->getValueType(0);
+  unsigned LO = Cpu0::LO;
+  unsigned HI = Cpu0::HI;
+  unsigned Opc = N->getOpcode() == ISD::SDIVREM ? Cpu0ISD::DivRem :
+                 Cpu0ISD::DivRemU;
+  SDLoc DL(N);
+
+  SDValue DivRem = DAG.getNode(Opc, DL, MVT::Glue,
+                               N->getOperand(0), N->getOperand(1));
+  SDValue InChain = DAG.getEntryNode();
+  SDValue InGlue = DivRem;
+
+  // insert MFLO
+  if (N->hasAnyUseOfValue(0)) {
+    SDValue CopyFromLo = DAG.getCopyFromReg(InChain, DL, LO, Ty,
+                                            InGlue);
+    DAG.ReplaceAllUsesOfValueWith(SDValue(N, 0), CopyFromLo);
+    InChain = CopyFromLo.getValue(1);
+    InGlue = CopyFromLo.getValue(2);
+  }
+
+  // insert MFHI
+  if (N->hasAnyUseOfValue(1)) {
+    SDValue CopyFromHi = DAG.getCopyFromReg(InChain, DL,
+                                            HI, Ty, InGlue);
+    DAG.ReplaceAllUsesOfValueWith(SDValue(N, 1), CopyFromHi);
+  }
+
+  return SDValue();
+}
+
+SDValue Cpu0TargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
+const {
+  SelectionDAG &DAG = DCI.DAG;
+  unsigned Opc = N->getOpcode();
+
+  switch (Opc) {
+    default: break;
+    case ISD::SDIVREM:
+    case ISD::UDIVREM:
+      return performDivRemCombine(N, DAG, DCI, Subtarget);
+  }
+
+  return SDValue();
 }
 
 //===----------------------------------------------------------------------===//
@@ -99,7 +162,7 @@ Cpu0TargetLowering::LowerFormalArguments(SDValue Chain,
                                          const SmallVectorImpl<ISD::InputArg> &Ins,
                                          const SDLoc &DL, SelectionDAG &DAG,
                                          SmallVectorImpl<SDValue> &InVals)
-const {
+                                          const {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   Cpu0FunctionInfo *Cpu0FI = MF.getInfo<Cpu0FunctionInfo>();
@@ -196,9 +259,9 @@ Cpu0TargetLowering::LowerReturn(SDValue Chain,
 }
 
 Cpu0TargetLowering::Cpu0CC::Cpu0CC(
-    CallingConv::ID CC, bool IsO32_, CCState &Info,
-    Cpu0CC::SpecialCallingConvType SpecialCallingConv_)
-    : CCInfo(Info), CallConv(CC), IsO32(IsO32_) {
+  CallingConv::ID CC, bool IsO32_, CCState &Info,
+  Cpu0CC::SpecialCallingConvType SpecialCallingConv_)
+  : CCInfo(Info), CallConv(CC), IsO32(IsO32_) {
   // Pre-allocate reserved argument area.
   CCInfo.AllocateStack(reservedArgArea(), Align(1));
 }

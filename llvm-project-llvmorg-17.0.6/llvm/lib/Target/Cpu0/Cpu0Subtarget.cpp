@@ -32,6 +32,11 @@ using namespace llvm;
 #define GET_SUBTARGETINFO_CTOR
 #include "Cpu0GenSubtargetInfo.inc"
 
+static cl::opt<bool> EnableOverflowOpt
+    ("cpu0-enable-overflow", cl::Hidden, cl::init(false),
+     cl::desc("Use trigger overflow instructions add and sub \
+                 instead of non-overflow instructions addu and subu"));
+
 extern bool FixGlobalBaseReg;
 
 void Cpu0Subtarget::anchor() { }
@@ -41,14 +46,14 @@ Cpu0Subtarget::Cpu0Subtarget(const Triple &TT, StringRef CPU,
                              StringRef FS, bool little,
                              const Cpu0TargetMachine &_TM) :
 //@1 }
-// Cpu0GenSubtargetInfo will display features by llc -march=cpu0 -mcpu=help
-    Cpu0GenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS),
-    IsLittle(little), TM(_TM), TargetTriple(TT), TSInfo(),
-    InstrInfo(
-        Cpu0InstrInfo::create(initializeSubtargetDependencies(CPU, FS, TM))),
-    FrameLowering(Cpu0FrameLowering::create(*this)),
-    TLInfo(Cpu0TargetLowering::create(TM, *this)) {
-
+  // Cpu0GenSubtargetInfo will display features by llc -march=cpu0 -mcpu=help
+  Cpu0GenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS),
+  IsLittle(little), TM(_TM), TargetTriple(TT), TSInfo(),
+      InstrInfo(
+          Cpu0InstrInfo::create(initializeSubtargetDependencies(CPU, FS, TM))),
+      FrameLowering(Cpu0FrameLowering::create(*this)),
+      TLInfo(Cpu0TargetLowering::create(TM, *this)) {
+  EnableOverflow = EnableOverflowOpt;
 }
 
 bool Cpu0Subtarget::isPositionIndependent() const {
