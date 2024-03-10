@@ -12,12 +12,12 @@ the Cpu0 Architecture》](https://jonathan2251.github.io/lbd/index.html)。
 # TODO
 
 
-为了尽快完成移植工作，做出以下时间安排。
+已完成除最后验证章节所有的代码，但需要时间整理，做出以下时间安排。
 
 
 - [x] 2024.3.3-3.4 chapter02
 - [x] 2024.3.5-3.8 chapter03
-- [ ] 2024.3.8-3.10 chapter04
+- [x] 2024.3.8-3.10 chapter04
 - [ ] 2024.3.11-3.13 chapter05
 - [ ] 2024.3.14-3.16 chapter06
 
