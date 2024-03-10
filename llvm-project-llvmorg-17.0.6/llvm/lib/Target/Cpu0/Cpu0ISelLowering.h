@@ -84,6 +84,8 @@ namespace llvm {
     //  DAG node.
     const char *getTargetNodeName(unsigned Opcode) const override;
 
+    SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+
   protected:
 
     /// ByValArgInfo - Byval argument information.
@@ -157,13 +159,13 @@ namespace llvm {
     // Lower Operand specifics
     SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
 
-    //- must be exist even without function all
+	//- must be exist even without function all
     SDValue
-    LowerFormalArguments(SDValue Chain,
-                         CallingConv::ID CallConv, bool IsVarArg,
-                         const SmallVectorImpl<ISD::InputArg> &Ins,
-                         const SDLoc &dl, SelectionDAG &DAG,
-                         SmallVectorImpl<SDValue> &InVals) const override;
+      LowerFormalArguments(SDValue Chain,
+                           CallingConv::ID CallConv, bool IsVarArg,
+                           const SmallVectorImpl<ISD::InputArg> &Ins,
+                           const SDLoc &dl, SelectionDAG &DAG,
+                           SmallVectorImpl<SDValue> &InVals) const override;
 
     SDValue LowerReturn(SDValue Chain,
                         CallingConv::ID CallConv, bool IsVarArg,

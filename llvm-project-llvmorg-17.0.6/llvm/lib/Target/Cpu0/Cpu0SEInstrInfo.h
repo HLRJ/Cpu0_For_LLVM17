@@ -29,7 +29,9 @@ public:
   explicit Cpu0SEInstrInfo(const Cpu0Subtarget &STI);
 
   const Cpu0RegisterInfo &getRegisterInfo() const override;
-
+  void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+                   const DebugLoc &DL, MCRegister DestReg, MCRegister SrcReg,
+                   bool KillSrc) const override;
   void storeRegToStack(MachineBasicBlock &MBB,
                        MachineBasicBlock::iterator MI,
                        Register SrcReg, bool isKill, int FrameIndex,

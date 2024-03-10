@@ -20,28 +20,30 @@
 
 namespace llvm {
 
-  class Cpu0SEDAGToDAGISel : public Cpu0DAGToDAGISel {
+class Cpu0SEDAGToDAGISel : public Cpu0DAGToDAGISel {
 
-  public:
-    explicit Cpu0SEDAGToDAGISel(Cpu0TargetMachine &TM, CodeGenOpt::Level OL)
-        : Cpu0DAGToDAGISel(TM, OL) {}
+public:
+  explicit Cpu0SEDAGToDAGISel(Cpu0TargetMachine &TM, CodeGenOpt::Level OL)
+      : Cpu0DAGToDAGISel(TM, OL) {}
 
-  private:
+private:
 
-    bool runOnMachineFunction(MachineFunction &MF) override;
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
-    bool trySelect(SDNode *Node) override;
+  bool trySelect(SDNode *Node) override;
 
-    void processFunctionAfterISel(MachineFunction &MF) override;
+  void processFunctionAfterISel(MachineFunction &MF) override;
 
-    // Insert instructions to initialize the global base register in the
-    // first MBB of the function.
+  // Insert instructions to initialize the global base register in the
+  // first MBB of the function.
 //  void initGlobalBaseReg(MachineFunction &MF);
+  std::pair<SDNode *, SDNode *> selectMULT(SDNode *N, unsigned Opc,
+                                           const SDLoc &DL, EVT Ty, bool HasLo,
+                                           bool HasHi);
+};
 
-  };
-
-  FunctionPass *createCpu0SEISelDag(Cpu0TargetMachine &TM,
-                                    CodeGenOpt::Level OptLevel);
+FunctionPass *createCpu0SEISelDag(Cpu0TargetMachine &TM,
+                                  CodeGenOpt::Level OptLevel);
 
 }
 
