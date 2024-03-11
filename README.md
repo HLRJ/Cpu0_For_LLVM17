@@ -36,7 +36,7 @@ https://zhuanlan.zhihu.com/p/352718079
 https://llvm.org/docs/WritingAnLLVMBackend.html
 
 
-https://www.bilibili.com/video/BV1sj411Y7xV/?spm_id_from=333.999.0.0&vd_source=12f684858ec3565d888939074b99dbbd
+https://www.bilibili.com/video/BV1sj411Y7xV
 
 https://www.cnblogs.com/Five100Miles/
 
