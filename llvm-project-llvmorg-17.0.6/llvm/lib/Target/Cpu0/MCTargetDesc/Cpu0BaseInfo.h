@@ -15,7 +15,7 @@
 #define LLVM_LIB_TARGET_CPU0_MCTARGETDESC_CPU0BASEINFO_H
 
 
-
+#include "Cpu0FixupKinds.h"
 #include "Cpu0MCTargetDesc.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/Support/DataTypes.h"

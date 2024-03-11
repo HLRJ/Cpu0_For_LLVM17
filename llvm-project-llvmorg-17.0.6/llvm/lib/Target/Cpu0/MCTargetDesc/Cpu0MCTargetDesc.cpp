@@ -13,6 +13,7 @@
 
 #include "Cpu0MCTargetDesc.h"
 #include "Cpu0MCAsmInfo.h"
+#include "Cpu0TargetStreamer.h"
 #include "InstPrinter/Cpu0InstPrinter.h"
 #include "TargetInfo/Cpu0TargetInfo.h"
 #include "llvm/MC/MCELFStreamer.h"
@@ -108,10 +109,10 @@ static MCInstPrinter *createCpu0MCInstPrinter(const Triple &T,
 
 namespace {
 
-  class Cpu0MCInstrAnalysis : public MCInstrAnalysis {
-  public:
-    Cpu0MCInstrAnalysis(const MCInstrInfo *Info) : MCInstrAnalysis(Info) {}
-  };
+class Cpu0MCInstrAnalysis : public MCInstrAnalysis {
+public:
+  Cpu0MCInstrAnalysis(const MCInstrInfo *Info) : MCInstrAnalysis(Info) {}
+};
 }
 
 static MCInstrAnalysis *createCpu0MCInstrAnalysis(const MCInstrInfo *Info) {
@@ -119,7 +120,22 @@ static MCInstrAnalysis *createCpu0MCInstrAnalysis(const MCInstrInfo *Info) {
 }
 
 
+static MCStreamer *createMCStreamer(const Triple &TT, MCContext &Context,
+                                    std::unique_ptr<MCAsmBackend> &&MAB,
+                                    std::unique_ptr<MCObjectWriter> &&OW,
+                                    std::unique_ptr<MCCodeEmitter> &&Emitter,
+                                    bool RelaxAll) {
+  return createELFStreamer(Context, std::move(MAB), std::move(OW),
+                           std::move(Emitter), RelaxAll);;
+}
 
+
+static MCTargetStreamer *createCpu0AsmTargetStreamer(MCStreamer &S,
+                                                     formatted_raw_ostream &OS,
+                                                     MCInstPrinter *InstPrint,
+                                                     bool isVerboseAsm) {
+  return new Cpu0TargetAsmStreamer(S, OS);
+}
 
 //@2 {
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCpu0TargetMC() {
@@ -132,16 +148,31 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCpu0TargetMC() {
 
     // Register the MC register info.
     TargetRegistry::RegisterMCRegInfo(*T, createCpu0MCRegisterInfo);
+     // Register the elf streamer.
+    TargetRegistry::RegisterELFStreamer(*T, createMCStreamer);
+
+    // Register the asm target streamer.
+    TargetRegistry::RegisterAsmTargetStreamer(*T, createCpu0AsmTargetStreamer);
+
+    // Register the asm backend.
+    TargetRegistry::RegisterMCAsmBackend(*T, createCpu0AsmBackend);
 
     // Register the MC subtarget info.
     TargetRegistry::RegisterMCSubtargetInfo(*T,
-                                            createCpu0MCSubtargetInfo);
+	                                        createCpu0MCSubtargetInfo);
     // Register the MC instruction analyzer.
     TargetRegistry::RegisterMCInstrAnalysis(*T, createCpu0MCInstrAnalysis);
     // Register the MCInstPrinter.
     TargetRegistry::RegisterMCInstPrinter(*T,
-                                          createCpu0MCInstPrinter);
+	                                      createCpu0MCInstPrinter);
+
   }
+  // Register the MC Code Emitter
+  for (Target *T : {&getTheCpu0Target(), &getTheCpu0elTarget()})
+    TargetRegistry::RegisterMCCodeEmitter(*T, createCpu0MCCodeEmitterEB);
+
+  for (Target *T : {&getTheCpu0Target(), &getTheCpu0elTarget()})
+    TargetRegistry::RegisterMCCodeEmitter(*T, createCpu0MCCodeEmitterEL);
 
 }
 //@2 }
