@@ -18,7 +18,7 @@ the Cpu0 Architecture》](https://jonathan2251.github.io/lbd/index.html)。
 - [x] 2024.3.3-3.4 chapter02
 - [x] 2024.3.5-3.8 chapter03
 - [x] 2024.3.8-3.10 chapter04
-- [ ] 2024.3.11-3.13 chapter05
+- [x] 2024.3.11-3.13 chapter05
 - [ ] 2024.3.14-3.16 chapter06
 
 后续章节待定，等上面章节完成后，再进行时间安排

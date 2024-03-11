@@ -13,6 +13,7 @@
 
 #include "Cpu0InstPrinter.h"
 
+#include "MCTargetDesc/Cpu0MCExpr.h"
 #include "Cpu0InstrInfo.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/MC/MCExpr.h"
