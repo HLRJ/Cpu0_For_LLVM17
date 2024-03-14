@@ -21,6 +21,15 @@ def SDT_Cpu0DivRem       : SDTypeProfile<0, 2,
                                          [SDTCisInt<0>,
                                           SDTCisSameAs<0, 1>]>;
 
+
+// Hi and Lo nodes are used to handle global addresses. Used on
+// Cpu0ISelLowering to lower stuff like GlobalAddress, ExternalSymbol
+// static model. (nothing to do with Cpu0 Registers Hi and Lo)
+def Cpu0Hi    : SDNode<"Cpu0ISD::Hi", SDTIntUnaryOp>;
+def Cpu0Lo    : SDNode<"Cpu0ISD::Lo", SDTIntUnaryOp>;
+def Cpu0GPRel : SDNode<"Cpu0ISD::GPRel", SDTIntUnaryOp>;
+
+
 // Return
 def Cpu0Ret : SDNode<"Cpu0ISD::Ret", SDTNone,
                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
@@ -30,6 +39,7 @@ def Cpu0DivRem    : SDNode<"Cpu0ISD::DivRem", SDT_Cpu0DivRem,
                            [SDNPOutGlue]>;
 def Cpu0DivRemU   : SDNode<"Cpu0ISD::DivRemU", SDT_Cpu0DivRem,
                            [SDNPOutGlue]>;
+def Cpu0Wrapper    : SDNode<"Cpu0ISD::Wrapper", SDTIntBinOp>;
 
 //===----------------------------------------------------------------------===//
 // Cpu0 Instruction Predicate Definitions.
@@ -81,6 +91,8 @@ def DisableOverflow : Predicate<"Subtarget->disableOverflow()">;
 
 def HasCmp      :     Predicate<"Subtarget->hasCmp()">;
 def HasSlt      :     Predicate<"Subtarget->hasSlt()">;
+
+def RelocPIC    :     Predicate<"TM.getRelocationModel() == Reloc::PIC_">;
 
 class Cpu0InstAlias<string Asm, dag Result, bit Emit = 0b1> :
   InstAlias<Asm, Result, Emit>;
@@ -563,6 +575,35 @@ def : Pat<(i32 immLow16Zero:$in),
 def : Pat<(i32 imm:$imm),
           (ORi (LUi (HI16 imm:$imm)), (LO16 imm:$imm))>;
 } // let Predicates = [Ch3_4]
+
+// hi/lo relocs
+let Predicates = [Ch6_1] in {
+def : Pat<(Cpu0Hi tglobaladdr:$in), (LUi tglobaladdr:$in)>;
+}
+
+let Predicates = [Ch6_1] in {
+def : Pat<(Cpu0Lo tglobaladdr:$in), (ORi ZERO, tglobaladdr:$in)>;
+}
+
+let Predicates = [Ch6_1] in {
+def : Pat<(add CPURegs:$hi, (Cpu0Lo tglobaladdr:$lo)),
+          (ORi CPURegs:$hi, tglobaladdr:$lo)>;
+}
+// gp_rel relocs
+let Predicates = [Ch6_1] in {
+def : Pat<(add CPURegs:$gp, (Cpu0GPRel tglobaladdr:$in)),
+          (ORi CPURegs:$gp, tglobaladdr:$in)>;
+}
+
+//@ wrapper_pic
+let Predicates = [Ch6_1] in {
+class WrapperPat<SDNode node, Instruction ORiOp, RegisterClass RC>:
+      Pat<(Cpu0Wrapper RC:$gp, node:$in),
+              (ORiOp RC:$gp, node:$in)>;
+
+def : WrapperPat<tglobaladdr, ORi, GPROut>;
+}
+
 
 let Predicates = [Ch4_2] in {
 def : Pat<(not CPURegs:$in),
