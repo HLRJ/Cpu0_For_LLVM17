@@ -64,7 +64,12 @@ getReservedRegs(const MachineFunction &MF) const {
 // MCPhysReg R
   for (auto R : ReservedCPURegs)
     Reserved.set(R);
-
+#ifdef ENABLE_GPRESTORE //1
+  const Cpu0FunctionInfo *Cpu0FI = MF.getInfo<Cpu0FunctionInfo>();
+  // Reserve GP if globalBaseRegFixed()
+  if (Cpu0FI->globalBaseRegFixed())
+#endif
+    Reserved.set(Cpu0::GP);
   return Reserved;
 }
 

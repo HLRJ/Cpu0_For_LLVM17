@@ -150,6 +150,27 @@ getExprOpValue(const MCExpr *Expr,SmallVectorImpl<MCFixup> &Fixups,
     Cpu0::Fixups FixupKind = Cpu0::Fixups(0);
     switch (Cpu0Expr->getKind()) {
     default: llvm_unreachable("Unsupported fixup kind for target expression!");
+  //@switch {
+//    switch(cast<MCSymbolRefExpr>(Expr)->getKind()) {
+  //@switch }
+    case Cpu0MCExpr::CEK_GPREL:
+      FixupKind = Cpu0::fixup_Cpu0_GPREL16;
+      break;
+    case Cpu0MCExpr::CEK_GOT:
+      FixupKind = Cpu0::fixup_Cpu0_GOT;
+      break;
+    case Cpu0MCExpr::CEK_ABS_HI:
+      FixupKind = Cpu0::fixup_Cpu0_HI16;
+      break;
+    case Cpu0MCExpr::CEK_ABS_LO:
+      FixupKind = Cpu0::fixup_Cpu0_LO16;
+      break;
+    case Cpu0MCExpr::CEK_GOT_HI16:
+      FixupKind = Cpu0::fixup_Cpu0_GOT_HI16;
+      break;
+    case Cpu0MCExpr::CEK_GOT_LO16:
+      FixupKind = Cpu0::fixup_Cpu0_GOT_LO16;
+      break;
     } // switch
     Fixups.push_back(MCFixup::create(0, Expr, MCFixupKind(FixupKind)));
     return 0;

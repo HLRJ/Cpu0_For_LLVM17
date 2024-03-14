@@ -25,6 +25,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Instructions.h"
@@ -47,10 +48,28 @@ using namespace llvm;
 // instructions for SelectionDAG operations.
 //===----------------------------------------------------------------------===//
 
-bool Cpu0DAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
-  bool Ret = SelectionDAGISel::runOnMachineFunction(MF);
 
+void Cpu0DAGToDAGISel::getAnalysisUsage(AnalysisUsage &AU) const {
+  // There are multiple MipsDAGToDAGISel instances added to the pass pipeline.
+  // We need to preserve StackProtector for the next one.
+  AU.addPreserved<StackProtector>();
+  SelectionDAGISel::getAnalysisUsage(AU);
+}
+
+bool Cpu0DAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
+  Subtarget = &MF.getSubtarget<Cpu0Subtarget>();
+  bool Ret = SelectionDAGISel::runOnMachineFunction(MF);
+  processFunctionAfterISel(MF);
   return Ret;
+}
+
+/// getGlobalBaseReg - Output the instructions required to put the
+/// GOT address into a register.
+SDNode *Cpu0DAGToDAGISel::getGlobalBaseReg() {
+  unsigned GlobalBaseReg = MF->getInfo<Cpu0FunctionInfo>()->getGlobalBaseReg();
+  return CurDAG->getRegister(GlobalBaseReg, getTargetLowering()->getPointerTy(
+                                                CurDAG->getDataLayout()))
+      .getNode();
 }
 
 //@SelectAddr {
@@ -83,6 +102,20 @@ SelectAddr(SDNode *Parent, SDValue Addr, SDValue &Base, SDValue &Offset) {
     return true;
   }
 
+  // on PIC code Load GA
+  if (Addr.getOpcode() == Cpu0ISD::Wrapper) {
+    Base   = Addr.getOperand(0);
+    Offset = Addr.getOperand(1);
+    return true;
+  }
+
+  //@static
+  if (TM.getRelocationModel() != Reloc::PIC_) {
+    if ((Addr.getOpcode() == ISD::TargetExternalSymbol ||
+        Addr.getOpcode() == ISD::TargetGlobalAddress))
+      return false;
+  }
+
   Base   = Addr;
   Offset = CurDAG->getTargetConstant(0, DL, ValTy);
   return true;
@@ -109,6 +142,10 @@ void Cpu0DAGToDAGISel::Select(SDNode *Node) {
   switch(Opcode) {
   default: break;
 
+  // Get target GOT address.
+  case ISD::GLOBAL_OFFSET_TABLE:
+    ReplaceNode(Node, getGlobalBaseReg());
+    return;
   }
 
   // Select the default instruction

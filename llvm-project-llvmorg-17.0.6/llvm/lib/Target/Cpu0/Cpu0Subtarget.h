@@ -28,6 +28,9 @@
 #define GET_SUBTARGETINFO_HEADER
 #include "Cpu0GenSubtargetInfo.inc"
 
+extern bool Cpu0ReserveGP;
+extern bool Cpu0NoCpload;
+
 //@1
 namespace llvm {
 class StringRef;
@@ -36,6 +39,9 @@ class Cpu0TargetMachine;
 
 class Cpu0Subtarget : public Cpu0GenSubtargetInfo {
   virtual void anchor();
+
+  // UseSmallSection - Small section is used.
+  bool UseSmallSection;
 
 public:
 
@@ -75,7 +81,7 @@ public:
   }
 
   bool hasChapter6_1() const {
-    return false;
+    return true;
   }
 
   bool hasChapter7_1() const {
@@ -176,6 +182,7 @@ public:
   bool hasCmp()   const { return HasCmp; }
   bool hasSlt()   const { return HasSlt; }
 
+  bool useSmallSection() const { return UseSmallSection; }
   bool abiUsesSoftFloat() const;
 
   bool enableLongBranchPass() const {
