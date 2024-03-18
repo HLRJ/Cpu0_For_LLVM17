@@ -86,6 +86,10 @@ namespace llvm {
     //  DAG node.
     const char *getTargetNodeName(unsigned Opcode) const override;
 
+    /// getSetCCResultType - get the ISD::SETCC result ValueType
+    EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
+                           EVT VT) const override;
+
     SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
   protected:
@@ -255,6 +259,7 @@ namespace llvm {
                         const SmallVectorImpl<SDValue> &OutVals,
                         const SDLoc &dl, SelectionDAG &DAG) const override;
 
+    bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
   };
   const Cpu0TargetLowering *
   createCpu0SETargetLowering(const Cpu0TargetMachine &TM, const Cpu0Subtarget &STI);

@@ -79,8 +79,25 @@ Cpu0TargetLowering::Cpu0TargetLowering(const Cpu0TargetMachine &TM,
                                        const Cpu0Subtarget &STI)
     : TargetLowering(TM), Subtarget(STI), ABI(TM.getABI()) {
 
+  // Cpu0 does not have i1 type, so use i32 for
+  // setcc operations results (slt, sgt, ...).
+  setBooleanContents(ZeroOrOneBooleanContent);
+  setBooleanVectorContents(ZeroOrNegativeOneBooleanContent);
+
+  // Load extented operations for i1 types must be promoted
+  for (MVT VT : MVT::integer_valuetypes()) {
+    setLoadExtAction(ISD::EXTLOAD,  VT, MVT::i1,  Promote);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1,  Promote);
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1,  Promote);
+  }
+
   // Cpu0 Custom Operations
   setOperationAction(ISD::GlobalAddress,      MVT::i32,   Custom);
+
+  // Handle i64 shl
+  setOperationAction(ISD::SHL_PARTS,          MVT::i32,   Expand);
+  setOperationAction(ISD::SRA_PARTS,          MVT::i32,   Expand);
+  setOperationAction(ISD::SRL_PARTS,          MVT::i32,   Expand);
 
   // Cpu0 Custom Operations
   setOperationAction(ISD::SDIV, MVT::i32, Expand);
@@ -143,6 +160,14 @@ static SDValue performDivRemCombine(SDNode *N, SelectionDAG& DAG,
   }
 
   return SDValue();
+}
+
+
+EVT Cpu0TargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
+                                           EVT VT) const {
+  if (!VT.isVector())
+    return MVT::i32;
+  return VT.changeVectorElementTypeToInteger();
 }
 
 SDValue Cpu0TargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
@@ -336,6 +361,12 @@ Cpu0TargetLowering::LowerReturn(SDValue Chain,
 
   // Return on Cpu0 is always a "ret $lr"
   return DAG.getNode(Cpu0ISD::Ret, DL, MVT::Other, RetOps);
+}
+
+bool
+Cpu0TargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const {
+  // The Cpu0 target isn't yet aware of offsets.
+  return false;
 }
 
 Cpu0TargetLowering::Cpu0CC::Cpu0CC(
