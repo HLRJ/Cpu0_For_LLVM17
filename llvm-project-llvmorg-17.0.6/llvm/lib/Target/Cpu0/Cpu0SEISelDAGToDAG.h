@@ -40,6 +40,9 @@ private:
   std::pair<SDNode *, SDNode *> selectMULT(SDNode *N, unsigned Opc,
                                            const SDLoc &DL, EVT Ty, bool HasLo,
                                            bool HasHi);
+
+  void selectAddESubE(unsigned MOp, SDValue InFlag, SDValue CmpLHS,
+                      const SDLoc &DL, SDNode *Node) const;
 };
 
 FunctionPass *createCpu0SEISelDag(Cpu0TargetMachine &TM,
