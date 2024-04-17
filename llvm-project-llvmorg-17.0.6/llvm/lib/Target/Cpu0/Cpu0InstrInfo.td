@@ -21,14 +21,12 @@ def SDT_Cpu0DivRem       : SDTypeProfile<0, 2,
                                          [SDTCisInt<0>,
                                           SDTCisSameAs<0, 1>]>;
 
-
 // Hi and Lo nodes are used to handle global addresses. Used on
 // Cpu0ISelLowering to lower stuff like GlobalAddress, ExternalSymbol
 // static model. (nothing to do with Cpu0 Registers Hi and Lo)
 def Cpu0Hi    : SDNode<"Cpu0ISD::Hi", SDTIntUnaryOp>;
 def Cpu0Lo    : SDNode<"Cpu0ISD::Lo", SDTIntUnaryOp>;
 def Cpu0GPRel : SDNode<"Cpu0ISD::GPRel", SDTIntUnaryOp>;
-
 
 // Return
 def Cpu0Ret : SDNode<"Cpu0ISD::Ret", SDTNone,
@@ -39,6 +37,7 @@ def Cpu0DivRem    : SDNode<"Cpu0ISD::DivRem", SDT_Cpu0DivRem,
                            [SDNPOutGlue]>;
 def Cpu0DivRemU   : SDNode<"Cpu0ISD::DivRemU", SDT_Cpu0DivRem,
                            [SDNPOutGlue]>;
+
 def Cpu0Wrapper    : SDNode<"Cpu0ISD::Wrapper", SDTIntBinOp>;
 
 //===----------------------------------------------------------------------===//
@@ -107,6 +106,26 @@ include "Cpu0InstrFormats.td"
 // Cpu0 Operand, Complex Patterns and Transformations Definitions.
 //===----------------------------------------------------------------------===//
 // Instruction operand types
+
+// BEQ, BNE
+def brtarget16    : Operand<OtherVT> {
+  let EncoderMethod = "getBranch16TargetOpValue";
+  let OperandType = "OPERAND_PCREL";
+  let DecoderMethod = "DecodeBranch16Target";
+}
+
+// JEQ, JNE, ...
+def brtarget24    : Operand<OtherVT> {
+  let EncoderMethod = "getBranch24TargetOpValue";
+  let OperandType = "OPERAND_PCREL";
+  let DecoderMethod = "DecodeBranch24Target";
+}
+
+// JMP
+def jmptarget    : Operand<OtherVT> {
+  let EncoderMethod = "getJumpTargetOpValue";
+  let OperandType = "OPERAND_PCREL";
+}
 
 // Signed Operand
 def simm16      : Operand<i32> {
@@ -243,7 +262,6 @@ class LogicNOR<bits<8> op, string instr_asm, RegisterClass RC>:
   let isCommutable = 1;
 }
 
-
 let Predicates = [Ch3_5] in {
 // Shifts
 class shift_rotate_imm<bits<8> op, bits<4> isRotate, string instr_asm,
@@ -319,6 +337,32 @@ class StoreM32<bits<8> op, string instr_asm, PatFrag OpNode,
   : StoreM<op, instr_asm, OpNode, GPROut, mem, Pseudo> {
 }
 
+let Predicates = [Ch8_1] in {
+// Conditional Branch, e.g. JEQ brtarget24
+class CBranch24<bits<8> op, string instr_asm, RegisterClass RC,
+                   list<Register> UseRegs>:
+  FJ<op, (outs), (ins RC:$ra, brtarget24:$addr),
+             !strconcat(instr_asm, "\t$ra, $addr"),
+             [], IIBranch>, Requires<[HasCmp]> {
+  let isBranch = 1;
+  let isTerminator = 1;
+  let hasDelaySlot = 1;
+//  let Predicates = [HasCmp]; // same effect as Requires
+}
+
+// Conditional Branch, e.g. BEQ $r1, $r2, brtarget16
+class CBranch16<bits<8> op, string instr_asm, PatFrag cond_op, RegisterClass RC>:
+  FL<op, (outs), (ins RC:$ra, RC:$rb, brtarget16:$imm16),
+             !strconcat(instr_asm, "\t$ra, $rb, $imm16"),
+             [(brcond (i32 (cond_op RC:$ra, RC:$rb)), bb:$imm16)], IIBranch>,
+             Requires<[HasSlt]> {
+  let isBranch = 1;
+  let isTerminator = 1;
+  let hasDelaySlot = 1;
+  let Defs = [AT];
+}
+}
+
 // SetCC
 let Predicates = [Ch4_2] in {
 class SetCC_R<bits<8> op, string instr_asm, PatFrag cond_op,
@@ -336,6 +380,18 @@ class SetCC_I<bits<8> op, string instr_asm, PatFrag cond_op, Operand Od,
      !strconcat(instr_asm, "\t$ra, $rb, $imm16"),
      [(set GPROut:$ra, (cond_op RC:$rb, imm_type:$imm16))],
      IIAlu>, Requires<[HasSlt]> {
+}
+}
+
+// Unconditional branch, such as JMP
+let Predicates = [Ch8_1] in {
+class UncondBranch<bits<8> op, string instr_asm>:
+  FJ<op, (outs), (ins jmptarget:$addr),
+             !strconcat(instr_asm, "\t$addr"), [(br bb:$addr)], IIBranch> {
+  let isBranch = 1;
+  let isTerminator = 1;
+  let isBarrier = 1;
+  let hasDelaySlot = 0;
 }
 }
 
@@ -523,14 +579,12 @@ def SUB     : ArithLogicR<0x14, "sub", sub, IIAlu, CPURegs>;
 }
 def MUL     : ArithLogicR<0x17, "mul", mul, IIImul, CPURegs, 1>;
 }
-
 let Predicates = [Ch4_2] in {
 def AND     : ArithLogicR<0x18, "and", and, IIAlu, CPURegs, 1>;
 def OR      : ArithLogicR<0x19, "or", or, IIAlu, CPURegs, 1>;
 def XOR     : ArithLogicR<0x1a, "xor", xor, IIAlu, CPURegs, 1>;
 def NOR     : LogicNOR<0x1b, "nor", CPURegs>;
 }
-
 
 /// Shift Instructions
 let Predicates = [Ch4_1] in {
@@ -560,6 +614,31 @@ def SLT     : SetCC_R<0x28, "slt", setlt, CPURegs>;
 def SLTu    : SetCC_R<0x29, "sltu", setult, CPURegs>;
 }
 }
+
+/// Jump and Branch Instructions
+let Predicates = [Ch8_1] in {
+let Predicates = [HasCmp] in {
+def JEQ     : CBranch24<0x30, "jeq", SR, [SW]>;
+def JNE     : CBranch24<0x31, "jne", SR, [SW]>;
+def JLT     : CBranch24<0x32, "jlt", SR, [SW]>;
+def JGT     : CBranch24<0x33, "jgt", SR, [SW]>;
+def JLE     : CBranch24<0x34, "jle", SR, [SW]>;
+def JGE     : CBranch24<0x35, "jge", SR, [SW]>;
+}
+
+let Predicates = [HasSlt] in {
+def BEQ     : CBranch16<0x37, "beq", seteq, GPROut>;
+def BNE     : CBranch16<0x38, "bne", setne, GPROut>;
+}
+
+def JMP     : UncondBranch<0x36, "jmp">;
+}
+
+//@ long branch support //1
+let isBranch = 1, isTerminator = 1, isBarrier = 1,
+    hasDelaySlot = 0, Defs = [LR] in
+def BAL: FJ<0x3A, (outs), (ins jmptarget:$addr), "bal\t$addr", [], IIBranch>,
+             Requires<[HasSlt]>;
 
 def JR      : JumpFR<0x3c, "jr", GPROut>;
 
@@ -608,7 +687,6 @@ def LEA_ADDiu : EffectiveAddress<"addiu\t$ra, $addr", CPURegs, mem_ea> {
 //@def LEA_ADDiu }
 }
 
-
 let Predicates = [Ch3_5] in {
 //===----------------------------------------------------------------------===//
 // Instruction aliases
@@ -635,7 +713,6 @@ def : Pat<(i32 imm:$imm),
           (ORi (LUi (HI16 imm:$imm)), (LO16 imm:$imm))>;
 } // let Predicates = [Ch3_4]
 
-
 let Predicates = [Ch7_1] in {
 // Carry patterns
 def : Pat<(subc CPURegs:$lhs, CPURegs:$rhs),
@@ -650,14 +727,28 @@ def : Pat<(addc  CPURegs:$src, immSExt16:$imm),
 let Predicates = [Ch6_1] in {
 def : Pat<(Cpu0Hi tglobaladdr:$in), (LUi tglobaladdr:$in)>;
 }
+let Predicates = [Ch8_1] in {
+def : Pat<(Cpu0Hi tblockaddress:$in), (LUi tblockaddress:$in)>;
+def : Pat<(Cpu0Hi tjumptable:$in), (LUi tjumptable:$in)>;
+}
 
 let Predicates = [Ch6_1] in {
 def : Pat<(Cpu0Lo tglobaladdr:$in), (ORi ZERO, tglobaladdr:$in)>;
+}
+let Predicates = [Ch8_1] in {
+def : Pat<(Cpu0Lo tblockaddress:$in), (ORi ZERO, tblockaddress:$in)>;
+def : Pat<(Cpu0Lo tjumptable:$in), (ORi ZERO, tjumptable:$in)>;
 }
 
 let Predicates = [Ch6_1] in {
 def : Pat<(add CPURegs:$hi, (Cpu0Lo tglobaladdr:$lo)),
           (ORi CPURegs:$hi, tglobaladdr:$lo)>;
+}
+let Predicates = [Ch8_1] in {
+def : Pat<(add CPURegs:$hi, (Cpu0Lo tblockaddress:$lo)),
+              (ORi CPURegs:$hi, tblockaddress:$lo)>;
+def : Pat<(add CPURegs:$hi, (Cpu0Lo tjumptable:$lo)),
+              (ORi CPURegs:$hi, tjumptable:$lo)>;
 }
 // gp_rel relocs
 let Predicates = [Ch6_1] in {
@@ -673,7 +764,9 @@ class WrapperPat<SDNode node, Instruction ORiOp, RegisterClass RC>:
 
 def : WrapperPat<tglobaladdr, ORi, GPROut>;
 }
-
+let Predicates = [Ch8_1] in {
+def : WrapperPat<tjumptable, ORi, GPROut>;
+}
 
 let Predicates = [Ch4_2] in {
 def : Pat<(not CPURegs:$in),
@@ -681,13 +774,95 @@ def : Pat<(not CPURegs:$in),
           (NOR CPURegs:$in, ZERO)>;
 }
 
-
 let Predicates = [Ch7_1] in {
 def : Pat<(i32 (extloadi1  addr:$src)), (LBu addr:$src)>;
 def : Pat<(i32 (extloadi8  addr:$src)), (LBu addr:$src)>;
 def : Pat<(i32 (extloadi16_a addr:$src)), (LHu addr:$src)>;
 }
 
+// brcond patterns
+let Predicates = [Ch8_1] in {
+
+// brcond for cmp instruction
+multiclass BrcondPatsCmp<RegisterClass RC, Instruction JEQOp, Instruction JNEOp,
+Instruction JLTOp, Instruction JGTOp, Instruction JLEOp, Instruction JGEOp,
+Instruction CMPOp, Instruction CMPuOp, Register ZEROReg> {
+def : Pat<(brcond (i32 (seteq RC:$lhs, RC:$rhs)), bb:$dst),
+          (JEQOp (CMPOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setueq RC:$lhs, RC:$rhs)), bb:$dst),
+          (JEQOp (CMPuOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setne RC:$lhs, RC:$rhs)), bb:$dst),
+          (JNEOp (CMPOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setune RC:$lhs, RC:$rhs)), bb:$dst),
+          (JNEOp (CMPuOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setlt RC:$lhs, RC:$rhs)), bb:$dst),
+          (JLTOp (CMPOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setult RC:$lhs, RC:$rhs)), bb:$dst),
+          (JLTOp (CMPuOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setgt RC:$lhs, RC:$rhs)), bb:$dst),
+          (JGTOp (CMPOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setugt RC:$lhs, RC:$rhs)), bb:$dst),
+          (JGTOp (CMPuOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setle RC:$lhs, RC:$rhs)), bb:$dst),
+          (JLEOp (CMPOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setule RC:$lhs, RC:$rhs)), bb:$dst),
+          (JLEOp (CMPuOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setge RC:$lhs, RC:$rhs)), bb:$dst),
+          (JGEOp (CMPOp RC:$lhs, RC:$rhs), bb:$dst)>;
+def : Pat<(brcond (i32 (setuge RC:$lhs, RC:$rhs)), bb:$dst),
+          (JGEOp (CMPuOp RC:$lhs, RC:$rhs), bb:$dst)>;
+
+def : Pat<(brcond RC:$cond, bb:$dst),
+          (JNEOp (CMPOp RC:$cond, ZEROReg), bb:$dst)>;
+}
+
+// brcond for slt instruction
+multiclass BrcondPatsSlt<RegisterClass RC, Instruction BEQOp, Instruction BNEOp,
+                      Instruction SLTOp, Instruction SLTuOp, Instruction SLTiOp,
+                      Instruction SLTiuOp, Register ZEROReg> {
+def : Pat<(brcond (i32 (setne RC:$lhs, 0)), bb:$dst),
+              (BNEOp RC:$lhs, ZEROReg, bb:$dst)>;
+def : Pat<(brcond (i32 (seteq RC:$lhs, 0)), bb:$dst),
+              (BEQOp RC:$lhs, ZEROReg, bb:$dst)>;
+
+def : Pat<(brcond (i32 (seteq RC:$lhs, RC:$rhs)), bb:$dst),
+              (BEQOp RC:$lhs, RC:$rhs, bb:$dst)>;
+def : Pat<(brcond (i32 (setueq RC:$lhs, RC:$rhs)), bb:$dst),
+              (BEQOp RC:$lhs, RC:$rhs, bb:$dst)>;
+def : Pat<(brcond (i32 (setne RC:$lhs, RC:$rhs)), bb:$dst),
+              (BNEOp RC:$lhs, RC:$rhs, bb:$dst)>;
+def : Pat<(brcond (i32 (setune RC:$lhs, RC:$rhs)), bb:$dst),
+              (BNEOp RC:$lhs, RC:$rhs, bb:$dst)>;
+def : Pat<(brcond (i32 (setlt RC:$lhs, RC:$rhs)), bb:$dst),
+              (BNE (SLTOp RC:$lhs, RC:$rhs), ZERO, bb:$dst)>;
+def : Pat<(brcond (i32 (setult RC:$lhs, RC:$rhs)), bb:$dst),
+              (BNE (SLTuOp RC:$lhs, RC:$rhs), ZERO, bb:$dst)>;
+def : Pat<(brcond (i32 (setgt RC:$lhs, RC:$rhs)), bb:$dst),
+              (BNE (SLTOp RC:$rhs, RC:$lhs), ZERO, bb:$dst)>;
+def : Pat<(brcond (i32 (setugt RC:$lhs, RC:$rhs)), bb:$dst),
+              (BNE (SLTuOp RC:$rhs, RC:$lhs), ZERO, bb:$dst)>;
+def : Pat<(brcond (i32 (setle RC:$lhs, RC:$rhs)), bb:$dst),
+              (BEQ (SLTOp RC:$rhs, RC:$lhs), ZERO, bb:$dst)>;
+def : Pat<(brcond (i32 (setule RC:$lhs, RC:$rhs)), bb:$dst),
+              (BEQ (SLTuOp RC:$rhs, RC:$lhs), ZERO, bb:$dst)>;
+def : Pat<(brcond (i32 (setge RC:$lhs, RC:$rhs)), bb:$dst),
+              (BEQ (SLTOp RC:$lhs, RC:$rhs), ZERO, bb:$dst)>;
+def : Pat<(brcond (i32 (setuge RC:$lhs, RC:$rhs)), bb:$dst),
+              (BEQ (SLTuOp RC:$lhs, RC:$rhs), ZERO, bb:$dst)>;
+
+def : Pat<(brcond RC:$cond, bb:$dst),
+              (BNEOp RC:$cond, ZEROReg, bb:$dst)>;
+}
+
+let Predicates = [HasSlt] in {
+defm : BrcondPatsSlt<CPURegs, BEQ, BNE, SLT, SLTu, SLTi, SLTiu, ZERO>;
+}
+
+let Predicates = [HasCmp] in {
+defm : BrcondPatsCmp<CPURegs, JEQ, JNE, JLT, JGT, JLE, JGE, CMP, CMPu, ZERO>;
+}
+
+} // let Predicates = [Ch8_1]
 
 // setcc patterns
 
@@ -802,3 +977,4 @@ defm : SetgtPatsCmp<CPURegs>;
 defm : SetgePatsCmp<CPURegs>;
 }
 } // let Predicates = [Ch4_2]
+

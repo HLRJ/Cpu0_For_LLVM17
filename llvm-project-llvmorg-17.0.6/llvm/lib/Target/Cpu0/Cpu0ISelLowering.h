@@ -241,10 +241,18 @@ namespace llvm {
     // Create a TargetExternalSymbol node.
     SDValue getTargetNode(ExternalSymbolSDNode *N, EVT Ty, SelectionDAG &DAG,
                           unsigned Flag) const;
+    // Create a TargetBlockAddress node.
+    SDValue getTargetNode(BlockAddressSDNode *N, EVT Ty, SelectionDAG &DAG,
+                          unsigned Flag) const;
 
+    // Create a TargetJumpTable node.
+    SDValue getTargetNode(JumpTableSDNode *N, EVT Ty, SelectionDAG &DAG,
+                          unsigned Flag) const;
     // Lower Operand specifics
     SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
-
+    SDValue lowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
+    SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
+    SDValue lowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
 	//- must be exist even without function all
     SDValue
       LowerFormalArguments(SDValue Chain,

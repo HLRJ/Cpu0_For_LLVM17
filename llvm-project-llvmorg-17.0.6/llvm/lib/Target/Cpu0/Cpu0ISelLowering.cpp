@@ -56,6 +56,18 @@ SDValue Cpu0TargetLowering::getTargetNode(ExternalSymbolSDNode *N, EVT Ty,
   return DAG.getTargetExternalSymbol(N->getSymbol(), Ty, Flag);
 }
 
+SDValue Cpu0TargetLowering::getTargetNode(BlockAddressSDNode *N, EVT Ty,
+                                          SelectionDAG &DAG,
+                                          unsigned Flag) const {
+  return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, 0, Flag);
+}
+
+SDValue Cpu0TargetLowering::getTargetNode(JumpTableSDNode *N, EVT Ty,
+                                          SelectionDAG &DAG,
+                                          unsigned Flag) const {
+  return DAG.getTargetJumpTable(N->getIndex(), Ty, Flag);
+}
+
 //@3_1 1 {
 const char *Cpu0TargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
@@ -91,29 +103,45 @@ Cpu0TargetLowering::Cpu0TargetLowering(const Cpu0TargetMachine &TM,
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1,  Promote);
   }
 
+  // Used by legalize types to correctly generate the setcc result.
+  // Without this, every float setcc comes with a AND/OR with the result,
+  // we don't want this, since the fpcmp result goes to a flag register,
+  // which is used implicitly by brcond and select operations.
+  AddPromotedToType(ISD::SETCC, MVT::i1, MVT::i32);
+
   // Cpu0 Custom Operations
   setOperationAction(ISD::GlobalAddress,      MVT::i32,   Custom);
+  setOperationAction(ISD::BlockAddress,       MVT::i32,   Custom);
+  setOperationAction(ISD::JumpTable,          MVT::i32,   Custom);
+  setOperationAction(ISD::BRCOND,             MVT::Other, Custom);
 
   // Handle i64 shl
   setOperationAction(ISD::SHL_PARTS,          MVT::i32,   Expand);
   setOperationAction(ISD::SRA_PARTS,          MVT::i32,   Expand);
   setOperationAction(ISD::SRL_PARTS,          MVT::i32,   Expand);
 
-  // Cpu0 Custom Operations
   setOperationAction(ISD::SDIV, MVT::i32, Expand);
   setOperationAction(ISD::SREM, MVT::i32, Expand);
   setOperationAction(ISD::UDIV, MVT::i32, Expand);
   setOperationAction(ISD::UREM, MVT::i32, Expand);
+
   // Operations not directly supported by Cpu0.
+  setOperationAction(ISD::BR_JT,             MVT::Other, Expand);
+  setOperationAction(ISD::BR_CC,             MVT::i32, Expand);
+  setOperationAction(ISD::CTPOP,             MVT::i32,   Expand);
+  setOperationAction(ISD::CTTZ,              MVT::i32,   Expand);
+  setOperationAction(ISD::CTTZ_ZERO_UNDEF,   MVT::i32,   Expand);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF,   MVT::i32,   Expand);
+  // Cpu0 doesn't have sext_inreg, replace them with shl/sra.
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i32 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::Other , Expand);
 
-
   setTargetDAGCombine(ISD::SDIVREM);
   setTargetDAGCombine(ISD::UDIVREM);
+
 //- Set .align 2
 // It will emit .align 2 later
   setMinFunctionAlignment(Align(2));
@@ -123,6 +151,13 @@ Cpu0TargetLowering::Cpu0TargetLowering(const Cpu0TargetMachine &TM,
 const Cpu0TargetLowering *Cpu0TargetLowering::create(const Cpu0TargetMachine &TM,
                                                      const Cpu0Subtarget &STI) {
   return llvm::createCpu0SETargetLowering(TM, STI);
+}
+
+EVT Cpu0TargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
+                                           EVT VT) const {
+  if (!VT.isVector())
+    return MVT::i32;
+  return VT.changeVectorElementTypeToInteger();
 }
 
 static SDValue performDivRemCombine(SDNode *N, SelectionDAG& DAG,
@@ -135,7 +170,7 @@ static SDValue performDivRemCombine(SDNode *N, SelectionDAG& DAG,
   unsigned LO = Cpu0::LO;
   unsigned HI = Cpu0::HI;
   unsigned Opc = N->getOpcode() == ISD::SDIVREM ? Cpu0ISD::DivRem :
-                 Cpu0ISD::DivRemU;
+                                                  Cpu0ISD::DivRemU;
   SDLoc DL(N);
 
   SDValue DivRem = DAG.getNode(Opc, DL, MVT::Glue,
@@ -162,24 +197,16 @@ static SDValue performDivRemCombine(SDNode *N, SelectionDAG& DAG,
   return SDValue();
 }
 
-
-EVT Cpu0TargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
-                                           EVT VT) const {
-  if (!VT.isVector())
-    return MVT::i32;
-  return VT.changeVectorElementTypeToInteger();
-}
-
 SDValue Cpu0TargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
-const {
+  const {
   SelectionDAG &DAG = DCI.DAG;
   unsigned Opc = N->getOpcode();
 
   switch (Opc) {
-    default: break;
-    case ISD::SDIVREM:
-    case ISD::UDIVREM:
-      return performDivRemCombine(N, DAG, DCI, Subtarget);
+  default: break;
+  case ISD::SDIVREM:
+  case ISD::UDIVREM:
+    return performDivRemCombine(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();
@@ -190,11 +217,13 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const
 {
   switch (Op.getOpcode())
   {
+  case ISD::BRCOND:             return lowerBRCOND(Op, DAG);
   case ISD::GlobalAddress:      return lowerGlobalAddress(Op, DAG);
+  case ISD::BlockAddress:       return lowerBlockAddress(Op, DAG);
+  case ISD::JumpTable:          return lowerJumpTable(Op, DAG);
   }
   return SDValue();
 }
-
 
 //===----------------------------------------------------------------------===//
 //  Lower helper functions
@@ -203,7 +232,11 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const
 //===----------------------------------------------------------------------===//
 //  Misc Lower Operation implementation
 //===----------------------------------------------------------------------===//
-
+SDValue Cpu0TargetLowering::
+lowerBRCOND(SDValue Op, SelectionDAG &DAG) const
+{
+  return Op;
+}
 
 SDValue Cpu0TargetLowering::lowerGlobalAddress(SDValue Op,
                                                SelectionDAG &DAG) const {
@@ -249,7 +282,28 @@ SDValue Cpu0TargetLowering::lowerGlobalAddress(SDValue Op,
       MachinePointerInfo::getGOT(DAG.getMachineFunction()));
 }
 
+SDValue Cpu0TargetLowering::lowerBlockAddress(SDValue Op,
+                                              SelectionDAG &DAG) const {
+  BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
+  EVT Ty = Op.getValueType();
 
+  if (!isPositionIndependent())
+    return getAddrNonPIC(N, Ty, DAG);
+
+  return getAddrLocal(N, Ty, DAG);
+}
+
+SDValue Cpu0TargetLowering::
+lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
+{
+  JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
+  EVT Ty = Op.getValueType();
+
+  if (!isPositionIndependent())
+    return getAddrNonPIC(N, Ty, DAG);
+
+  return getAddrLocal(N, Ty, DAG);
+}
 
 #include "Cpu0GenCallingConv.inc"
 
@@ -423,3 +477,4 @@ MVT Cpu0TargetLowering::Cpu0CC::getRegVT(MVT VT,
 
   return VT;
 }
+
