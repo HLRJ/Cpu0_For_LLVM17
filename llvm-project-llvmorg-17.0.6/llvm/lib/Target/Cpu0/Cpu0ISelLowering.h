@@ -253,6 +253,7 @@ namespace llvm {
     SDValue lowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
+    SDValue lowerSELECT(SDValue Op, SelectionDAG &DAG) const;
 	//- must be exist even without function all
     SDValue
       LowerFormalArguments(SDValue Chain,

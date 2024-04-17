@@ -173,7 +173,62 @@ MCOperand Cpu0MCInstLower::LowerOperand(const MachineOperand& MO,
   return MCOperand();
 }
 
+MCOperand Cpu0MCInstLower::createSub(MachineBasicBlock *BB1,
+                                     MachineBasicBlock *BB2,
+                                     Cpu0MCExpr::Cpu0ExprKind Kind) const {
+  const MCSymbolRefExpr *Sym1 = MCSymbolRefExpr::create(BB1->getSymbol(), *Ctx);
+  const MCSymbolRefExpr *Sym2 = MCSymbolRefExpr::create(BB2->getSymbol(), *Ctx);
+  const MCBinaryExpr *Sub = MCBinaryExpr::createSub(Sym1, Sym2, *Ctx);
+
+  return MCOperand::createExpr(Cpu0MCExpr::create(Kind, Sub, *Ctx));
+}
+
+void Cpu0MCInstLower::
+lowerLongBranchLUi(const MachineInstr *MI, MCInst &OutMI) const {
+  OutMI.setOpcode(Cpu0::LUi);
+
+  // Lower register operand.
+  OutMI.addOperand(LowerOperand(MI->getOperand(0)));
+
+  // Create %hi($tgt-$baltgt).
+  OutMI.addOperand(createSub(MI->getOperand(1).getMBB(),
+                             MI->getOperand(2).getMBB(),
+                             Cpu0MCExpr::CEK_ABS_HI));
+}
+
+void Cpu0MCInstLower::
+lowerLongBranchADDiu(const MachineInstr *MI, MCInst &OutMI, int Opcode,
+                     Cpu0MCExpr::Cpu0ExprKind Kind) const {
+  OutMI.setOpcode(Opcode);
+
+  // Lower two register operands.
+  for (unsigned I = 0, E = 2; I != E; ++I) {
+    const MachineOperand &MO = MI->getOperand(I);
+    OutMI.addOperand(LowerOperand(MO));
+  }
+
+  // Create %lo($tgt-$baltgt) or %hi($tgt-$baltgt).
+  OutMI.addOperand(createSub(MI->getOperand(2).getMBB(),
+                             MI->getOperand(3).getMBB(), Kind));
+}
+
+bool Cpu0MCInstLower::lowerLongBranch(const MachineInstr *MI,
+                                      MCInst &OutMI) const {
+  switch (MI->getOpcode()) {
+  default:
+    return false;
+  case Cpu0::LONG_BRANCH_LUi:
+    lowerLongBranchLUi(MI, OutMI);
+    return true;
+  case Cpu0::LONG_BRANCH_ADDiu:
+    lowerLongBranchADDiu(MI, OutMI, Cpu0::ADDiu,
+                         Cpu0MCExpr::CEK_ABS_LO);
+    return true;
+  }
+}
 void Cpu0MCInstLower::Lower(const MachineInstr *MI, MCInst &OutMI) const {
+  if (lowerLongBranch(MI, OutMI))
+    return;
   OutMI.setOpcode(MI->getOpcode());
 
   for (unsigned i = 0, e = MI->getNumOperands(); i != e; ++i) {

@@ -39,6 +39,9 @@ add_llvm_target(Cpu0CodeGen
   Cpu0ISelDAGToDAG.cpp
   Cpu0SEISelDAGToDAG.cpp
   Cpu0AnalyzeImmediate.cpp
+  Cpu0LongBranch.cpp
+  Cpu0DelaySlotFiller.cpp
+  Cpu0DelUselessJMP.cpp
 
   LINK_COMPONENTS
   Analysis

@@ -30,11 +30,11 @@ using namespace llvm;
 #define DEBUG_TYPE "cpu0"
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCpu0Target() {
-  // Register the target.
-  //- Big endian Target Machine
-  RegisterTargetMachine<Cpu0ebTargetMachine> X(getTheCpu0Target());
-  //- Little endian Target Machine
-  RegisterTargetMachine<Cpu0elTargetMachine> Y(getTheCpu0elTarget());
+    // Register the target.
+    //- Big endian Target Machine
+    RegisterTargetMachine<Cpu0ebTargetMachine> X(getTheCpu0Target());
+    //- Little endian Target Machine
+    RegisterTargetMachine<Cpu0elTargetMachine> Y(getTheCpu0elTarget());
 }
 
 
@@ -85,7 +85,7 @@ Cpu0TargetMachine::Cpu0TargetMachine(const Target &T, const Triple &TT,
                                      std::optional<CodeModel::Model> CM,
                                      CodeGenOpt::Level OL, bool JIT,
                                      bool isLittle)
-//- Default is big endian
+  //- Default is big endian
     : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, isLittle), TT,
                         CPU, FS, Options, getEffectiveRelocModel(JIT, RM),
                         getEffectiveCodeModel(CM, CodeModel::Small), OL),
@@ -131,7 +131,7 @@ Cpu0TargetMachine::getSubtargetImpl(const Function &F) const {
     // function that reside in TargetOptions.
     resetTargetOptions(F);
     I = std::make_unique<Cpu0Subtarget>(TargetTriple, CPU, FS, isLittle,
-                                        *this);
+                                         *this);
   }
   return I.get();
 }
@@ -146,29 +146,58 @@ MachineFunctionInfo *Cpu0TargetMachine::createMachineFunctionInfo(
 namespace {
 //@Cpu0PassConfig {
 /// Cpu0 Code Generator Pass Configuration Options.
-  class Cpu0PassConfig : public TargetPassConfig {
-  public:
-    Cpu0PassConfig(Cpu0TargetMachine &TM, PassManagerBase &PM)
-        : TargetPassConfig(TM, PM) {}
+class Cpu0PassConfig : public TargetPassConfig {
+public:
+  Cpu0PassConfig(Cpu0TargetMachine &TM, PassManagerBase &PM)
+    : TargetPassConfig(TM, PM) {}
 
-    Cpu0TargetMachine &getCpu0TargetMachine() const {
-      return getTM<Cpu0TargetMachine>();
-    }
+  Cpu0TargetMachine &getCpu0TargetMachine() const {
+    return getTM<Cpu0TargetMachine>();
+  }
 
-    const Cpu0Subtarget &getCpu0Subtarget() const {
-      return *getCpu0TargetMachine().getSubtargetImpl();
-    }
-    bool addInstSelector() override;
-  };
+  const Cpu0Subtarget &getCpu0Subtarget() const {
+    return *getCpu0TargetMachine().getSubtargetImpl();
+  }
+//  void addIRPasses() override;
+  bool addInstSelector() override;
+  void addPreEmitPass() override;
+};
 } // namespace
 
 TargetPassConfig *Cpu0TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new Cpu0PassConfig(*this, PM);
 }
 
+//void Cpu0PassConfig::addIRPasses() {
+//  TargetPassConfig::addIRPasses();
+//  addPass(createAtomicExpandPass());
+//
+//}
+
 // Install an instruction selector pass using
 // the ISelDag to gen Cpu0 code.
 bool Cpu0PassConfig::addInstSelector() {
-  addPass(createCpu0SEISelDag(getCpu0TargetMachine(), getOptLevel()));
-  return false;
+    addPass(createCpu0SEISelDag(getCpu0TargetMachine(), getOptLevel()));
+    return false;
 }
+
+// Implemented by targets that want to run passes immediately before
+// machine code is emitted. return true if -print-machineinstrs should
+// print out the code after the passes.
+void Cpu0PassConfig::addPreEmitPass() {
+  Cpu0TargetMachine &TM = getCpu0TargetMachine();
+//@8_2 1{
+  addPass(createCpu0DelJmpPass(TM));
+//@8_2 1}
+  addPass(createCpu0DelaySlotFillerPass(TM));
+//@8_2 2}
+  addPass(createCpu0LongBranchPass(TM));
+  return;
+}
+
+//// Implemented by targets that want to run passes immediately before
+//// machine code is emitted.
+//void Cpu0PassConfig::addPreEmitPass() {
+//    // Expand pseudo instructions that are sensitive to register allocation.
+//    addPass(createCpu0ExpandPseudoPass());
+//}
