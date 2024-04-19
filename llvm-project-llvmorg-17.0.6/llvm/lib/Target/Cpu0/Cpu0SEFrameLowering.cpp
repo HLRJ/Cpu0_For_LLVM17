@@ -123,6 +123,38 @@ void Cpu0SEFrameLowering::emitEpilogue(MachineFunction &MF,
 }
 //}
 
+bool Cpu0SEFrameLowering::
+spillCalleeSavedRegisters(MachineBasicBlock &MBB,
+                          MachineBasicBlock::iterator MI,
+                          ArrayRef<CalleeSavedInfo> CSI,
+                          const TargetRegisterInfo *TRI) const {
+  MachineFunction *MF = MBB.getParent();
+  MachineBasicBlock *EntryBlock = &MF->front();
+  const TargetInstrInfo &TII = *MF->getSubtarget().getInstrInfo();
+
+  for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
+    // Add the callee-saved register as live-in. Do not add if the register is
+    // LR and return address is taken, because it has already been added in
+    // method Cpu0TargetLowering::LowerRETURNADDR.
+    // It's killed at the spill, unless the register is LR and return address
+    // is taken.
+    unsigned Reg = CSI[i].getReg();
+    bool IsRAAndRetAddrIsTaken = (Reg == Cpu0::LR)
+        && MF->getFrameInfo().isReturnAddressTaken();
+    if (!IsRAAndRetAddrIsTaken)
+      EntryBlock->addLiveIn(Reg);
+
+    // Insert the spill to the stack frame.
+    bool IsKill = !IsRAAndRetAddrIsTaken;
+    const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
+    TII.storeRegToStackSlot(*EntryBlock, MI, Reg, IsKill,
+                            CSI[i].getFrameIdx(), RC, TRI, Register());
+  }
+
+  return true;
+}
+
+
 //@hasReservedCallFrame {
 bool
 Cpu0SEFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {

@@ -53,6 +53,9 @@ MCOperand Cpu0MCInstLower::LowerSymbolOperand(const MachineOperand &MO,
     TargetKind = Cpu0MCExpr::CEK_GPREL;
     break;
 
+  case Cpu0II::MO_GOT_CALL:
+    TargetKind = Cpu0MCExpr::CEK_GOT_CALL;
+    break;
   case Cpu0II::MO_GOT:
     TargetKind = Cpu0MCExpr::CEK_GOT;
     break;
@@ -84,6 +87,11 @@ MCOperand Cpu0MCInstLower::LowerSymbolOperand(const MachineOperand &MO,
 
   case MachineOperand::MO_BlockAddress:
     Symbol = AsmPrinter.GetBlockAddressSymbol(MO.getBlockAddress());
+    Offset += MO.getOffset();
+    break;
+
+  case MachineOperand::MO_ExternalSymbol:
+    Symbol = AsmPrinter.GetExternalSymbolSymbol(MO.getSymbolName());
     Offset += MO.getOffset();
     break;
 
@@ -161,6 +169,7 @@ MCOperand Cpu0MCInstLower::LowerOperand(const MachineOperand& MO,
   case MachineOperand::MO_Immediate:
     return MCOperand::createImm(MO.getImm() + offset);
   case MachineOperand::MO_MachineBasicBlock:
+  case MachineOperand::MO_ExternalSymbol:
   case MachineOperand::MO_JumpTableIndex:
   case MachineOperand::MO_BlockAddress:
   case MachineOperand::MO_GlobalAddress:

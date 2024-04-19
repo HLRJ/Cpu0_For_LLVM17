@@ -37,7 +37,9 @@ class LLVM_LIBRARY_VISIBILITY Cpu0AsmPrinter : public AsmPrinter {
   void EmitInstrWithMacroNoAT(const MachineInstr *MI);
 
 private:
-
+  // tblgen'erated function.
+  bool emitPseudoExpansionLowering(MCStreamer &OutStreamer,
+                                   const MachineInstr *MI);
   // lowerOperand - Convert a MachineOperand into the equivalent MCOperand.
   bool lowerOperand(const MachineOperand &MO, MCOperand &MCOp);
 

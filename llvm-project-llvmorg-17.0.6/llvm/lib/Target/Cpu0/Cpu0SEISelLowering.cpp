@@ -28,8 +28,8 @@ using namespace llvm;
 #define DEBUG_TYPE "cpu0-isel"
 
 static cl::opt<bool>
-    EnableCpu0TailCalls("enable-cpu0-tail-calls", cl::Hidden,
-                        cl::desc("CPU0: Enable tail calls."), cl::init(false));
+EnableCpu0TailCalls("enable-cpu0-tail-calls", cl::Hidden,
+                    cl::desc("CPU0: Enable tail calls."), cl::init(false));
 
 //@Cpu0SETargetLowering {
 Cpu0SETargetLowering::Cpu0SETargetLowering(const Cpu0TargetMachine &TM,
@@ -56,3 +56,18 @@ llvm::createCpu0SETargetLowering(const Cpu0TargetMachine &TM,
   return new Cpu0SETargetLowering(TM, STI);
 }
 
+bool Cpu0SETargetLowering::
+isEligibleForTailCallOptimization(const Cpu0CC &Cpu0CCInfo,
+                                  unsigned NextStackOffset,
+                                  const Cpu0FunctionInfo& FI) const {
+  if (!EnableCpu0TailCalls)
+    return false;
+
+  // Return false if either the callee or caller has a byval argument.
+  if (Cpu0CCInfo.hasByValArg() || FI.hasByvalArg())
+    return false;
+
+  // Return true if the callee's argument area is no larger than the
+  // caller's.
+  return NextStackOffset <= FI.getIncomingArgSize();
+}

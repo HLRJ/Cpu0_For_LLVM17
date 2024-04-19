@@ -95,7 +95,15 @@ bool Cpu0FrameLowering::hasFP(const MachineFunction &MF) const {
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
 
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-         MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
-         TRI->hasStackRealignment(MF);
+      MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
+      TRI->hasStackRealignment(MF);
+}
+
+// Eliminate ADJCALLSTACKDOWN, ADJCALLSTACKUP pseudo instructions
+MachineBasicBlock::iterator Cpu0FrameLowering::
+eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator I) const {
+
+  return MBB.erase(I);
 }
 

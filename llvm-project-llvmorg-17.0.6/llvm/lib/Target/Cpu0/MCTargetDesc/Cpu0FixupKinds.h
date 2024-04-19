@@ -50,6 +50,8 @@ namespace Cpu0 {
     fixup_Cpu0_PC24,
 
 
+    // resulting in - R_CPU0_CALL16.
+    fixup_Cpu0_CALL16,
 
     // resulting in - R_CPU0_GOT_HI16
     fixup_Cpu0_GOT_HI16,

@@ -47,6 +47,21 @@ public:
       const override;
   ~Cpu0FunctionInfo() override;
 
+  bool isInArgFI(int FI) const {
+    return FI <= InArgFIRange.first && FI >= InArgFIRange.second;
+  }
+  void setLastInArgFI(int FI) { InArgFIRange.second = FI; }
+  bool isOutArgFI(int FI) const {
+    return FI <= OutArgFIRange.first && FI >= OutArgFIRange.second;
+  }
+
+  int getGPFI() const { return GPFI; }
+  void setGPFI(int FI) { GPFI = FI; }
+  bool isGPFI(int FI) const { return GPFI && GPFI == FI; }
+
+  bool isDynAllocFI(int FI) const { return DynAllocFI && DynAllocFI == FI; }
+
+
   unsigned getSRetReturnReg() const { return SRetReturnReg; }
   void setSRetReturnReg(unsigned Reg) { SRetReturnReg = Reg; }
 
@@ -81,6 +96,13 @@ public:
   bool getEmitNOAT() const { return EmitNOAT; }
   void setEmitNOAT() { EmitNOAT = true; }
 
+  /// Create a MachinePointerInfo that has an ExternalSymbolPseudoSourceValue
+  /// object representing a GOT entry for an external function.
+  MachinePointerInfo callPtrInfo(MachineFunction &MF, const char *ES);
+
+  /// Create a MachinePointerInfo that has a GlobalValuePseudoSourceValue object
+  /// representing a GOT entry for a global function.
+  MachinePointerInfo callPtrInfo(MachineFunction &MF, const GlobalValue *GV);
 private:
   virtual void anchor();
 
@@ -114,7 +136,16 @@ private:
   /// relocation models.
   unsigned GlobalBaseReg;
 
-  int GPFI; // Index of the frame object for restoring $gp
+  // Range of frame object indices.
+  // InArgFIRange: Range of indices of all frame objects created during call to
+  //               LowerFormalArguments.
+  // OutArgFIRange: Range of indices of all frame objects created during call to
+  //                LowerCall except for the frame object for restoring $gp.
+  std::pair<int, int> InArgFIRange = std::make_pair(-1, 0);
+  std::pair<int, int> OutArgFIRange = std::make_pair(-1, 0);
+
+  int GPFI = 0; // Index of the frame object for restoring $gp
+  mutable int DynAllocFI = 0; // Frame index of dynamically allocated stack area.
   bool EmitNOAT = false;
   unsigned MaxCallFrameSize = 0;
 };
