@@ -12,20 +12,7 @@ the Cpu0 Architecture》](https://jonathan2251.github.io/lbd/index.html)。
 # TODO
 
 
-已完成除最后验证章节所有的代码，但需要时间整理，做出以下时间安排。
 
-
-- [x] 2024.3.3-3.4 chapter02
-- [x] 2024.3.5-3.8 chapter03
-- [x] 2024.3.8-3.10 chapter04
-- [x] 2024.3.11-3.13 chapter05
-- [x] 2024.3.14-3.16 chapter06
-- [x] 2024.3.17-3.19 chapter07
-- [ ] 2024.3.20-3.21 chapter08
-- [ ] 2024.3.22-3.23 chapter09
-
-
-后续章节待定，等上面章节完成后，再进行时间安排
 
 使用chatgpt将tutorial简单地翻译了一下，可供[参考](https://docs.qq.com/doc/DUlV4TE5LbEpjT21F)
 
