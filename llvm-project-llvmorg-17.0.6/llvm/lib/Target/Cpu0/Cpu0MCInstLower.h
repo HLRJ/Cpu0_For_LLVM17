@@ -41,6 +41,14 @@ public:
 private:
   MCOperand LowerSymbolOperand(const MachineOperand &MO,
                                MachineOperandType MOTy, unsigned Offset) const;
+
+  MCOperand createSub(MachineBasicBlock *BB1, MachineBasicBlock *BB2,
+                      Cpu0MCExpr::Cpu0ExprKind Kind) const;
+  void lowerLongBranchLUi(const MachineInstr *MI, MCInst &OutMI) const;
+  void lowerLongBranchADDiu(const MachineInstr *MI, MCInst &OutMI,
+                            int Opcode,
+                            Cpu0MCExpr::Cpu0ExprKind Kind) const;
+  bool lowerLongBranch(const MachineInstr *MI, MCInst &OutMI) const;
 };
 }
 

@@ -89,11 +89,11 @@ public:
   }
 
   bool hasChapter8_1() const {
-    return false;
+    return true;
   }
 
   bool hasChapter8_2() const {
-    return false;
+    return true;
   }
 
   bool hasChapter9_1() const {
