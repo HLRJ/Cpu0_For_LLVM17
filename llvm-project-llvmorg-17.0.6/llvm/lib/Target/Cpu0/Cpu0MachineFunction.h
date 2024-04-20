@@ -58,7 +58,9 @@ public:
   int getGPFI() const { return GPFI; }
   void setGPFI(int FI) { GPFI = FI; }
   bool isGPFI(int FI) const { return GPFI && GPFI == FI; }
-
+#ifdef ENABLE_GPRESTORE
+  bool needGPSaveRestore() const { return getGPFI(); }
+#endif
   bool isDynAllocFI(int FI) const { return DynAllocFI && DynAllocFI == FI; }
 
 

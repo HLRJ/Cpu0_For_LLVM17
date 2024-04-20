@@ -266,6 +266,16 @@ class ArithLogicR<bits<8> op, string instr_asm, SDNode OpNode,
 }
 }
 
+class IntrinArithLogicR<bits<8> op, string instr_asm, SDPatternOperator OpNode,
+                  InstrItinClass itin, RegisterClass RC, bit isComm = 0>:
+  FA<op, (outs GPROut:$ra), (ins RC:$rb, RC:$rc),
+     !strconcat(instr_asm, "\t$ra, $rb, $rc"),
+     [(set GPROut:$ra, (OpNode RC:$rb, RC:$rc))], itin> {
+  let shamt = 0;
+  let isCommutable = isComm;	// e.g. add rb rc =  add rc rb
+  let isReMaterializable = 1;
+}
+
 let Predicates = [Ch4_2] in {
 class CmpInstr<bits<8> op, string instr_asm,
                InstrItinClass itin, RegisterClass RC, RegisterClass RD,
@@ -456,7 +466,6 @@ let isCall=1, hasDelaySlot=1 in {
     FJ<op, (outs), (ins calltarget:$target, variable_ops),
        !strconcat(instr_asm, "\t$target"), [(Cpu0JmpLink imm:$target)],
        IIBranch> {
-    let DecoderMethod = "DecodeJumpTarget";
        }
   //@JumpLink }
 
@@ -795,6 +804,24 @@ def TAILCALL : TailCall<JMP>;
 def TAILCALL_R : TailCallReg<GPROut, JR>;
 }
 
+// Exception handling related node and instructions.
+// The conversion sequence is:
+// ISD::EH_RETURN -> Cpu0ISD::EH_RETURN ->
+// CPU0eh_return -> (stack change + indirect branch)
+//
+// CPU0eh_return takes the place of regular return instruction
+// but takes two arguments (V1, V0) which are used for storing
+// the offset and return address respectively.
+def SDT_Cpu0EHRET : SDTypeProfile<0, 2, [SDTCisInt<0>, SDTCisPtrTy<1>]>;
+
+def CPU0ehret : SDNode<"Cpu0ISD::EH_RETURN", SDT_Cpu0EHRET,
+                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+
+let Uses = [V0, V1], isTerminator = 1, isReturn = 1, isBarrier = 1 in {
+  def CPU0eh_return32 : Cpu0Pseudo<(outs), (ins GPROut:$spoff, GPROut:$dst), "",
+                                [(CPU0ehret GPROut:$spoff, GPROut:$dst)]>;
+}
+
 let Predicates = [Ch7_1] in {
 /// Count Leading
 def CLZ : CountLeading0<0x15, "clz", CPURegs>;
@@ -810,6 +837,8 @@ def LEA_ADDiu : EffectiveAddress<"addiu\t$ra, $addr", CPURegs, mem_ea> {
 }
 //@def LEA_ADDiu }
 }
+
+//def GCD : IntrinArithLogicR<0x60, "gcd", int_cpu0_gcd, IIAlu, CPURegs, 1>;
 
 let Predicates = [Ch3_5] in {
 //===----------------------------------------------------------------------===//

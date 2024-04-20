@@ -161,6 +161,9 @@ public:
 //  void addIRPasses() override;
   bool addInstSelector() override;
   void addPreEmitPass() override;
+#ifdef ENABLE_GPRESTORE
+  void addPreRegAlloc() override;
+#endif
 };
 } // namespace
 
@@ -180,6 +183,16 @@ bool Cpu0PassConfig::addInstSelector() {
     addPass(createCpu0SEISelDag(getCpu0TargetMachine(), getOptLevel()));
     return false;
 }
+
+#ifdef ENABLE_GPRESTORE
+void Cpu0PassConfig::addPreRegAlloc() {
+  if (!Cpu0ReserveGP) {
+    // $gp is a caller-saved register.
+    addPass(createCpu0EmitGPRestorePass(getCpu0TargetMachine()));
+  }
+  return;
+}
+#endif
 
 // Implemented by targets that want to run passes immediately before
 // machine code is emitted. return true if -print-machineinstrs should

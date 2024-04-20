@@ -154,6 +154,36 @@ void Cpu0MCInstLower::LowerCPLOAD(SmallVector<MCInst, 4>& MCInsts) {
   CreateMCInst(MCInsts[2], Cpu0::ADD, GPReg, GPReg, T9Reg);
 }
 
+#ifdef ENABLE_GPRESTORE
+// Lower ".cprestore offset" to "st $gp, offset($sp)".
+void Cpu0MCInstLower::LowerCPRESTORE(int64_t Offset,
+                                     SmallVector<MCInst, 4>& MCInsts) {
+  assert(isInt<32>(Offset) && (Offset >= 0) &&
+         "Imm operand of .cprestore must be a non-negative 32-bit value.");
+
+  MCOperand SPReg = MCOperand::createReg(Cpu0::SP), BaseReg = SPReg;
+  MCOperand GPReg = MCOperand::createReg(Cpu0::GP);
+  MCOperand ZEROReg = MCOperand::createReg(Cpu0::ZERO);
+
+  if (!isInt<16>(Offset)) {
+    unsigned Hi = ((Offset + 0x8000) >> 16) & 0xffff;
+    Offset &= 0xffff;
+    MCOperand ATReg = MCOperand::createReg(Cpu0::AT);
+    BaseReg = ATReg;
+
+    // lui   at,hi
+    // add   at,at,sp
+    MCInsts.resize(2);
+    CreateMCInst(MCInsts[0], Cpu0::LUi, ATReg, ZEROReg, MCOperand::createImm(Hi));
+    CreateMCInst(MCInsts[1], Cpu0::ADD, ATReg, ATReg, SPReg);
+  }
+
+  MCInst St;
+  CreateMCInst(St, Cpu0::ST, GPReg, BaseReg, MCOperand::createImm(Offset));
+  MCInsts.push_back(St);
+}
+#endif
+
 //@LowerOperand {
 MCOperand Cpu0MCInstLower::LowerOperand(const MachineOperand& MO,
                                         unsigned offset) const {

@@ -64,6 +64,8 @@ private:
   void expandRetLR(MachineBasicBlock &MBB, MachineBasicBlock::iterator I) const;
 
   unsigned getOppositeBranchOpc(unsigned Opc) const override;
+  void expandEhReturn(MachineBasicBlock &MBB,
+                      MachineBasicBlock::iterator I) const;
 };
 
 }

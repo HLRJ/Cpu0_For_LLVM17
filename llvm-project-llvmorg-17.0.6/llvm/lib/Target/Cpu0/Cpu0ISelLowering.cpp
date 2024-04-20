@@ -39,7 +39,6 @@ using namespace llvm;
 
 STATISTIC(NumTailCalls, "Number of tail calls");
 
-
 SDValue Cpu0TargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty) const {
   Cpu0FunctionInfo *FI = DAG.getMachineFunction().getInfo<Cpu0FunctionInfo>();
   return DAG.getRegister(FI->getGlobalBaseReg(), Ty);
@@ -118,11 +117,15 @@ Cpu0TargetLowering::Cpu0TargetLowering(const Cpu0TargetMachine &TM,
   setOperationAction(ISD::JumpTable,          MVT::i32,   Custom);
   setOperationAction(ISD::SELECT,             MVT::i32,   Custom);
   setOperationAction(ISD::BRCOND,             MVT::Other, Custom);
+  setOperationAction(ISD::EH_RETURN, MVT::Other, Custom);
+  setOperationAction(ISD::VASTART,            MVT::Other, Custom);
 
   // Handle i64 shl
   setOperationAction(ISD::SHL_PARTS,          MVT::i32,   Expand);
   setOperationAction(ISD::SRA_PARTS,          MVT::i32,   Expand);
   setOperationAction(ISD::SRL_PARTS,          MVT::i32,   Expand);
+
+  setOperationAction(ISD::ADD,                MVT::i32,   Custom);
 
   setOperationAction(ISD::SDIV, MVT::i32, Expand);
   setOperationAction(ISD::SREM, MVT::i32, Expand);
@@ -145,12 +148,31 @@ Cpu0TargetLowering::Cpu0TargetLowering(const Cpu0TargetMachine &TM,
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i32 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::Other , Expand);
 
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32,  Expand);
+
+  //@vararg 1 {
+  // Support va_arg(): variable numbers (not fixed numbers) of arguments
+  //  (parameters) for function all
+  setOperationAction(ISD::VAARG,             MVT::Other, Expand);
+  setOperationAction(ISD::VACOPY,            MVT::Other, Expand);
+  setOperationAction(ISD::VAEND,             MVT::Other, Expand);
+
+  //@llvm.stacksave
+  // Use the default for now
+  setOperationAction(ISD::STACKSAVE,         MVT::Other, Expand);
+  setOperationAction(ISD::STACKRESTORE,      MVT::Other, Expand);
+
+  setOperationAction(ISD::BSWAP, MVT::i32, Expand);
+  setOperationAction(ISD::BSWAP, MVT::i64, Expand);
+
   setTargetDAGCombine(ISD::SDIVREM);
   setTargetDAGCombine(ISD::UDIVREM);
 
 //- Set .align 2
 // It will emit .align 2 later
   setMinFunctionAlignment(Align(2));
+
+  setStackPointerRegisterToSaveRestore(Cpu0::SP);
 
 }
 
@@ -228,6 +250,11 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const
   case ISD::BlockAddress:       return lowerBlockAddress(Op, DAG);
   case ISD::JumpTable:          return lowerJumpTable(Op, DAG);
   case ISD::SELECT:             return lowerSELECT(Op, DAG);
+  case ISD::VASTART:            return lowerVASTART(Op, DAG);
+  case ISD::FRAMEADDR:          return lowerFRAMEADDR(Op, DAG);
+  case ISD::RETURNADDR:         return lowerRETURNADDR(Op, DAG);
+  case ISD::EH_RETURN:          return lowerEH_RETURN(Op, DAG);
+  case ISD::ADD:                return lowerADD(Op, DAG);
   }
   return SDValue();
 }
@@ -255,6 +282,7 @@ lowerBRCOND(SDValue Op, SelectionDAG &DAG) const
 {
   return Op;
 }
+
 SDValue Cpu0TargetLowering::
 lowerSELECT(SDValue Op, SelectionDAG &DAG) const
 {
@@ -326,6 +354,98 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
     return getAddrNonPIC(N, Ty, DAG);
 
   return getAddrLocal(N, Ty, DAG);
+}
+
+SDValue Cpu0TargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  Cpu0FunctionInfo *FuncInfo = MF.getInfo<Cpu0FunctionInfo>();
+
+  SDLoc DL = SDLoc(Op);
+  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
+                                 getPointerTy(MF.getDataLayout()));
+
+  // vastart just stores the address of the VarArgsFrameIndex slot into the
+  // memory location argument.
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
+                      MachinePointerInfo(SV));
+}
+
+SDValue Cpu0TargetLowering::
+lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const {
+  // check the depth
+  assert((cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue() == 0) &&
+         "Frame address can only be determined for current frame.");
+
+  MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI.setFrameAddressIsTaken(true);
+  EVT VT = Op.getValueType();
+  SDLoc DL(Op);
+  SDValue FrameAddr = DAG.getCopyFromReg(
+      DAG.getEntryNode(), DL, Cpu0::FP, VT);
+  return FrameAddr;
+}
+
+SDValue Cpu0TargetLowering::lowerRETURNADDR(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  if (verifyReturnAddressArgumentIsConstant(Op, DAG))
+    return SDValue();
+
+  // check the depth
+  assert((cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue() == 0) &&
+         "Return address can be determined only for current frame.");
+
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  MVT VT = Op.getSimpleValueType();
+  unsigned LR = Cpu0::LR;
+  MFI.setReturnAddressIsTaken(true);
+
+  // Return LR, which contains the return address. Mark it an implicit live-in.
+  unsigned Reg = MF.addLiveIn(LR, getRegClassFor(VT));
+  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), Reg, VT);
+}
+
+// An EH_RETURN is the result of lowering llvm.eh.return which in turn is
+// generated from __builtin_eh_return (offset, handler)
+// The effect of this is to adjust the stack pointer by "offset"
+// and then branch to "handler".
+SDValue Cpu0TargetLowering::lowerEH_RETURN(SDValue Op, SelectionDAG &DAG)
+                                                                     const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  Cpu0FunctionInfo *Cpu0FI = MF.getInfo<Cpu0FunctionInfo>();
+
+  Cpu0FI->setCallsEhReturn();
+  SDValue Chain     = Op.getOperand(0);
+  SDValue Offset    = Op.getOperand(1);
+  SDValue Handler   = Op.getOperand(2);
+  SDLoc DL(Op);
+  EVT Ty = MVT::i32;
+
+  // Store stack offset in V1, store jump target in V0. Glue CopyToReg and
+  // EH_RETURN nodes, so that instructions are emitted back-to-back.
+  unsigned OffsetReg = Cpu0::V1;
+  unsigned AddrReg = Cpu0::V0;
+  Chain = DAG.getCopyToReg(Chain, DL, OffsetReg, Offset, SDValue());
+  Chain = DAG.getCopyToReg(Chain, DL, AddrReg, Handler, Chain.getValue(1));
+  return DAG.getNode(Cpu0ISD::EH_RETURN, DL, MVT::Other, Chain,
+                     DAG.getRegister(OffsetReg, Ty),
+                     DAG.getRegister(AddrReg, getPointerTy(MF.getDataLayout())),
+                     Chain.getValue(1));
+}
+
+SDValue Cpu0TargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
+  if (Op->getOperand(0).getOpcode() != ISD::FRAMEADDR
+      || cast<ConstantSDNode>
+        (Op->getOperand(0).getOperand(0))->getZExtValue() != 0
+      || Op->getOperand(1).getOpcode() != ISD::FRAME_TO_ARGS_OFFSET)
+    return SDValue();
+
+  MachineFunction &MF = DAG.getMachineFunction();
+  Cpu0FunctionInfo *Cpu0FI = MF.getInfo<Cpu0FunctionInfo>();
+
+  Cpu0FI->setCallsEhDwarf();
+  return Op;
 }
 
 //===----------------------------------------------------------------------===//
@@ -428,7 +548,6 @@ static const MCPhysReg O32IntRegs[] = {
   Cpu0::A0, Cpu0::A1
 };
 
-
 SDValue
 Cpu0TargetLowering::passArgOnStack(SDValue StackPtr, unsigned Offset,
                                    SDValue Chain, SDValue Arg, const SDLoc &DL,
@@ -500,7 +619,6 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
     Ops.push_back(InFlag);
 }
 
-
 //@LowerCall {
 /// LowerCall - functions arguments are copied from virtual regs to
 /// (physical regs)/(stack frame), CALLSEQ_START and CALLSEQ_END are emitted.
@@ -540,6 +658,17 @@ Cpu0TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NextStackOffset = CCInfo.getStackSize();
+
+#ifdef ENABLE_GPRESTORE
+  if (!Cpu0ReserveGP) {
+    // If this is the first call, create a stack frame object that points to
+    // a location to which .cprestore saves $gp.
+    if (IsPIC && Cpu0FI->globalBaseRegFixed() && !Cpu0FI->getGPFI())
+      Cpu0FI->setGPFI(MFI.CreateFixedObject(4, 0, true));
+    if (Cpu0FI->needGPSaveRestore())
+      MFI.setObjectOffset(Cpu0FI->getGPFI(), NextStackOffset);
+  }
+#endif
 
   //@TailCall 1 {
   // Check if it's really possible to do a tail call.
@@ -699,9 +828,8 @@ Cpu0TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   return LowerCallResult(Chain, InFlag, CallConv, IsVarArg,
                          Ins, DL, DAG, InVals, CLI.Callee.getNode(), CLI.RetTy);
 }
-
-
 //@LowerCall }
+
 /// LowerCallResult - Lower the result values of a call into the
 /// appropriate copies out of appropriate physical registers.
 SDValue
@@ -737,7 +865,6 @@ Cpu0TargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
 
   return Chain;
 }
-
 
 //===----------------------------------------------------------------------===//
 //@            Formal Arguments Calling Convention Implementation
@@ -875,6 +1002,9 @@ Cpu0TargetLowering::LowerFormalArguments(SDValue Chain,
   }
 //@Ordinary struct type: 1 }
 
+  if (IsVarArg)
+    writeVarArgRegs(OutChains, Cpu0CCInfo, Chain, DL, DAG);
+
   // All stores are grouped in one node to allow the matching between
   // the size of Ins and InVals. This only happens when on varg functions
   if (!OutChains.empty()) {
@@ -900,7 +1030,6 @@ Cpu0TargetLowering::CanLowerReturn(CallingConv::ID CallConv,
                  RVLocs, Context);
   return CCInfo.CheckReturn(Outs, RetCC_Cpu0);
 }
-
 
 SDValue
 Cpu0TargetLowering::LowerReturn(SDValue Chain,
@@ -1005,6 +1134,7 @@ analyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Args,
 
   unsigned NumOpnds = Args.size();
   llvm::CCAssignFn *FixedFn = fixedArgFn();
+  llvm::CCAssignFn *VarFn = varArgFn();
 
   //@3 {
   for (unsigned I = 0; I != NumOpnds; ++I) {
@@ -1018,6 +1148,9 @@ analyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Args,
       continue;
     }
 
+    if (IsVarArg && !Args[I].IsFixed)
+      R = VarFn(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, CCInfo);
+    else
     {
       MVT RegVT = getRegVT(ArgVT, IsSoftFloat);
       R = FixedFn(I, ArgVT, RegVT, CCValAssign::Full, ArgFlags, CCInfo);
@@ -1139,6 +1272,13 @@ const ArrayRef<MCPhysReg> Cpu0TargetLowering::Cpu0CC::intArgRegs() const {
 }
 
 llvm::CCAssignFn *Cpu0TargetLowering::Cpu0CC::fixedArgFn() const {
+  if (IsO32)
+    return CC_Cpu0O32;
+  else // IsS32
+    return CC_Cpu0S32;
+}
+
+llvm::CCAssignFn *Cpu0TargetLowering::Cpu0CC::varArgFn() const {
   if (IsO32)
     return CC_Cpu0O32;
   else // IsS32
@@ -1317,5 +1457,49 @@ passByValArg(SDValue Chain, const SDLoc &DL,
                         /*isTailCall=*/false,
                         MachinePointerInfo(), MachinePointerInfo());
   MemOpChains.push_back(Chain);
+}
+
+void Cpu0TargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
+                                         const Cpu0CC &CC, SDValue Chain,
+                                         const SDLoc &DL, SelectionDAG &DAG) const {
+  unsigned NumRegs = CC.numIntArgRegs();
+  const ArrayRef<MCPhysReg> ArgRegs = CC.intArgRegs();
+  const CCState &CCInfo = CC.getCCInfo();
+  unsigned Idx = CCInfo.getFirstUnallocated(ArgRegs);
+  unsigned RegSize = CC.regSize();
+  MVT RegTy = MVT::getIntegerVT(RegSize * 8);
+  const TargetRegisterClass *RC = getRegClassFor(RegTy);
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  Cpu0FunctionInfo *Cpu0FI = MF.getInfo<Cpu0FunctionInfo>();
+
+  // Offset of the first variable argument from stack pointer.
+  int VaArgOffset;
+
+  if (NumRegs == Idx)
+    VaArgOffset = alignTo(CCInfo.getStackSize(), RegSize);
+  else
+    VaArgOffset = (int)CC.reservedArgArea() - (int)(RegSize * (NumRegs - Idx));
+
+  // Record the frame index of the first variable argument
+  // which is a value necessary to VASTART.
+  int FI = MFI.CreateFixedObject(RegSize, VaArgOffset, true);
+  Cpu0FI->setVarArgsFrameIndex(FI);
+
+  // Copy the integer registers that have not been used for argument passing
+  // to the argument register save area. For O32, the save area is allocated
+  // in the caller's stack frame, while for N32/64, it is allocated in the
+  // callee's stack frame.
+  for (unsigned I = Idx; I < NumRegs; ++I, VaArgOffset += RegSize) {
+    unsigned Reg = addLiveIn(MF, ArgRegs[I], RC);
+    SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegTy);
+    FI = MFI.CreateFixedObject(RegSize, VaArgOffset, true);
+    SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
+                                 MachinePointerInfo());
+    cast<StoreSDNode>(Store.getNode())->getMemOperand()->setValue(
+        (Value *)nullptr);
+    OutChains.push_back(Store);
+  }
 }
 
