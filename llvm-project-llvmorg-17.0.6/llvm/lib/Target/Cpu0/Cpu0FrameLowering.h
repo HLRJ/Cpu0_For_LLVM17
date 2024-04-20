@@ -21,24 +21,28 @@
 namespace llvm {
   class Cpu0Subtarget;
 
-  class Cpu0FrameLowering : public TargetFrameLowering {
-  protected:
-    const Cpu0Subtarget &STI;
+class Cpu0FrameLowering : public TargetFrameLowering {
+protected:
+  const Cpu0Subtarget &STI;
 
-  public:
-    explicit Cpu0FrameLowering(const Cpu0Subtarget &sti, unsigned Alignment)
-        : TargetFrameLowering(StackGrowsDown, Align(Alignment), 0, Align(Alignment)),
-          STI(sti) {
-    }
+public:
+  explicit Cpu0FrameLowering(const Cpu0Subtarget &sti, unsigned Alignment)
+    : TargetFrameLowering(StackGrowsDown, Align(Alignment), 0, Align(Alignment)),
+      STI(sti) {
+  }
 
-    static const Cpu0FrameLowering *create(const Cpu0Subtarget &ST);
+  static const Cpu0FrameLowering *create(const Cpu0Subtarget &ST);
 
-    bool hasFP(const MachineFunction &MF) const override;
+  bool hasFP(const MachineFunction &MF) const override;
 
-  };
+  MachineBasicBlock::iterator
+  eliminateCallFramePseudoInstr(MachineFunction &MF,
+                                  MachineBasicBlock &MBB,
+                                  MachineBasicBlock::iterator I) const override;
+};
 
 /// Create Cpu0FrameLowering objects.
-  const Cpu0FrameLowering *createCpu0SEFrameLowering(const Cpu0Subtarget &ST);
+const Cpu0FrameLowering *createCpu0SEFrameLowering(const Cpu0Subtarget &ST);
 
 } // End llvm namespace
 

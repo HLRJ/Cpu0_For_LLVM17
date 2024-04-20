@@ -53,6 +53,9 @@ MCOperand Cpu0MCInstLower::LowerSymbolOperand(const MachineOperand &MO,
     TargetKind = Cpu0MCExpr::CEK_GPREL;
     break;
 
+  case Cpu0II::MO_GOT_CALL:
+    TargetKind = Cpu0MCExpr::CEK_GOT_CALL;
+    break;
   case Cpu0II::MO_GOT:
     TargetKind = Cpu0MCExpr::CEK_GOT;
     break;
@@ -84,6 +87,11 @@ MCOperand Cpu0MCInstLower::LowerSymbolOperand(const MachineOperand &MO,
 
   case MachineOperand::MO_BlockAddress:
     Symbol = AsmPrinter.GetBlockAddressSymbol(MO.getBlockAddress());
+    Offset += MO.getOffset();
+    break;
+
+  case MachineOperand::MO_ExternalSymbol:
+    Symbol = AsmPrinter.GetExternalSymbolSymbol(MO.getSymbolName());
     Offset += MO.getOffset();
     break;
 
@@ -146,6 +154,36 @@ void Cpu0MCInstLower::LowerCPLOAD(SmallVector<MCInst, 4>& MCInsts) {
   CreateMCInst(MCInsts[2], Cpu0::ADD, GPReg, GPReg, T9Reg);
 }
 
+#ifdef ENABLE_GPRESTORE
+// Lower ".cprestore offset" to "st $gp, offset($sp)".
+void Cpu0MCInstLower::LowerCPRESTORE(int64_t Offset,
+                                     SmallVector<MCInst, 4>& MCInsts) {
+  assert(isInt<32>(Offset) && (Offset >= 0) &&
+         "Imm operand of .cprestore must be a non-negative 32-bit value.");
+
+  MCOperand SPReg = MCOperand::createReg(Cpu0::SP), BaseReg = SPReg;
+  MCOperand GPReg = MCOperand::createReg(Cpu0::GP);
+  MCOperand ZEROReg = MCOperand::createReg(Cpu0::ZERO);
+
+  if (!isInt<16>(Offset)) {
+    unsigned Hi = ((Offset + 0x8000) >> 16) & 0xffff;
+    Offset &= 0xffff;
+    MCOperand ATReg = MCOperand::createReg(Cpu0::AT);
+    BaseReg = ATReg;
+
+    // lui   at,hi
+    // add   at,at,sp
+    MCInsts.resize(2);
+    CreateMCInst(MCInsts[0], Cpu0::LUi, ATReg, ZEROReg, MCOperand::createImm(Hi));
+    CreateMCInst(MCInsts[1], Cpu0::ADD, ATReg, ATReg, SPReg);
+  }
+
+  MCInst St;
+  CreateMCInst(St, Cpu0::ST, GPReg, BaseReg, MCOperand::createImm(Offset));
+  MCInsts.push_back(St);
+}
+#endif
+
 //@LowerOperand {
 MCOperand Cpu0MCInstLower::LowerOperand(const MachineOperand& MO,
                                         unsigned offset) const {
@@ -161,6 +199,7 @@ MCOperand Cpu0MCInstLower::LowerOperand(const MachineOperand& MO,
   case MachineOperand::MO_Immediate:
     return MCOperand::createImm(MO.getImm() + offset);
   case MachineOperand::MO_MachineBasicBlock:
+  case MachineOperand::MO_ExternalSymbol:
   case MachineOperand::MO_JumpTableIndex:
   case MachineOperand::MO_BlockAddress:
   case MachineOperand::MO_GlobalAddress:

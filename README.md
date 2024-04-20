@@ -16,6 +16,7 @@ the Cpu0 Architecture》](https://jonathan2251.github.io/lbd/index.html)。
 
 使用chatgpt将tutorial简单地翻译了一下，可供[参考](https://docs.qq.com/doc/DUlV4TE5LbEpjT21F)
 
+[Learn llvm17后端部分翻译](https://docs.qq.com/doc/DUk1rWnBkU0RWQmdH)
 
 # References and Acknowledgements
 
