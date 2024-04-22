@@ -8,6 +8,7 @@ set(LLVM_TARGET_DEFINITIONS Cpu0Other.td)
 #  came from Cpu0InstrInfo.td.
 tablegen(LLVM Cpu0GenRegisterInfo.inc -gen-register-info)
 tablegen(LLVM Cpu0GenInstrInfo.inc -gen-instr-info)
+tablegen(LLVM Cpu0GenDisassemblerTables.inc -gen-disassembler)
 tablegen(LLVM Cpu0GenCodeEmitter.inc -gen-emitter)
 tablegen(LLVM Cpu0GenMCCodeEmitter.inc -gen-emitter)
 
@@ -54,6 +55,7 @@ add_llvm_target(Cpu0CodeGen
   Cpu0Desc
   Cpu0Info
   Cpu0AsmPrinter
+  Cpu0Disassembler
   SelectionDAG
   Support
   Target
@@ -66,5 +68,6 @@ add_llvm_target(Cpu0CodeGen
 
 # Should match with "subdirectories =  MCTargetDesc TargetInfo" in LLVMBuild.txt
 add_subdirectory(InstPrinter)
+add_subdirectory(Disassembler)
 add_subdirectory(TargetInfo)
 add_subdirectory(MCTargetDesc)
